@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtualenvs / uv
+.venv/
+venv/
+env/
+.uv/
+
+# Environment
+.env
+
+# Test / type / lint cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# GNSS/RTKLIB/лог-дампы
+*.rnx
+*.obs
+*.nav
+*.pos
+*.ubx
+*.log
+logs/
+data/
