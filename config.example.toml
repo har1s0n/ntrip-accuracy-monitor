@@ -1,0 +1,56 @@
+# config.example.toml — пример конфигурации ntrip-accuracy-monitor
+# Скопировать в config.toml и отредактировать.
+#
+# Пароли задаются ТОЛЬКО через переменные окружения (в .env или в shell):
+#   PG_PASSWORD               — обязателен, пароль PostgreSQL.
+#   NTRIP_UPSTREAM_PASSWORD   — опционален, пароль для upstream NTRIP.
+# Если пароль указан в TOML — он молча отбрасывается.
+
+log_level = "INFO"
+
+[postgres]
+host = "localhost"
+port = 5432
+database = "ntrip_monitor"
+user = "ntrip_user"
+# password — из env PG_PASSWORD
+min_pool_size = 2
+max_pool_size = 10
+
+[caster]
+# Собственный NTRIP-кастер, отдающий RTCM роверу №2
+host = "0.0.0.0"
+port = 2101
+mountpoint = "EFT_BASE"
+
+[upstream]
+# Внешний NTRIP-источник — выключен по умолчанию.
+# password — из env NTRIP_UPSTREAM_PASSWORD.
+enabled = false
+# url = "http://rtk2go.com:2101"
+# mountpoint = "some_mount"
+# user = "user@example.com"
+
+# NMEA-источники (приёмники EFT RS3). Минимум один.
+# port по умолчанию 9001 — штатный TCP-порт NMEA на EFT RS3.
+[[streams]]
+stream_id = "base"
+host = "192.168.77.137"
+role = "base"
+
+[[streams]]
+stream_id = "rover_rtk"
+host = "192.168.77.138"
+role = "rover_rtk"
+
+[[streams]]
+stream_id = "rover_spp"
+host = "192.168.77.139"
+role = "rover_spp"
+
+[reference]
+# Эталонные координаты антенны №2 из пост-обработки RTKLIB
+latitude_deg = 55.7558
+longitude_deg = 37.6173
+ellipsoidal_height_m = 187.5
+source = "RTKLIB rtkpost 2025-04-15"

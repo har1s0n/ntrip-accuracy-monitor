@@ -18,6 +18,8 @@ env/
 # Environment
 .env
 
+config.toml
+
 # Test / type / lint cache
 .pytest_cache/
 .mypy_cache/
