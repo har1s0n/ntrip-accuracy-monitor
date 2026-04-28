@@ -1,5 +1,10 @@
 """Публичный API NMEA-адаптера."""
 
+from ntrip_accuracy_monitor.protocols.nmea.transport import (
+    MAX_NMEA_LINE_LEN,
+    NmeaTcpClient,
+)
+
 from .errors import (
     NmeaChecksumError,
     NmeaError,
@@ -26,6 +31,7 @@ from .parser import (
 
 __all__ = [
     "ALLOWED_TALKERS",
+    "MAX_NMEA_LINE_LEN",
     "GgaRecord",
     "GsaRecord",
     "GstRecord",
@@ -33,6 +39,7 @@ __all__ = [
     "NmeaError",
     "NmeaParseError",
     "NmeaRecord",
+    "NmeaTcpClient",
     "NmeaUnsupportedTalkerError",
     "RmcRecord",
     "ZdaRecord",
