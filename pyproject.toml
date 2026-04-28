@@ -13,33 +13,33 @@ license = { text = "MIT" }
 authors = [{ name = "ntrip-accuracy-monitor contributors" }]
 keywords = ["gnss", "ntrip", "rtcm", "nmea", "rtk", "dgnss", "accuracy"]
 classifiers = [
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Scientific/Engineering :: GIS",
-    "Framework :: AsyncIO",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: GIS",
+  "Framework :: AsyncIO",
 ]
 dependencies = [
-    "asyncpg>=0.30.0",
-    "pydantic>=2.10",
-    "pynmeagps>=1.0.43",
-    "pyrtcm>=1.1.9",
-    "pygnssutils>=1.1.21",
-    "pyproj>=3.7.0",
-    "numpy>=2.2",
+  "asyncpg>=0.30.0",
+  "pydantic>=2.10",
+  "pynmeagps>=1.0.43",
+  "pyrtcm>=1.1.9",
+  "pygnssutils>=1.1.21",
+  "pyproj>=3.7.0",
+  "numpy>=2.2",
 ]
 
 [project.optional-dependencies]
 analysis = [
-    "scipy>=1.15",
-    "pandas>=2.2",
-    "matplotlib>=3.10",
+  "scipy>=1.15",
+  "pandas>=2.2",
+  "matplotlib>=3.10",
 ]
 dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.25",
-    "pytest-cov>=6.0",
-    "mypy>=1.15",
-    "ruff>=0.9",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.25",
+  "pytest-cov>=6.0",
+  "mypy>=1.15",
+  "ruff>=0.9",
 ]
 
 [project.scripts]
@@ -65,12 +65,12 @@ show_error_codes = true
 # По мере появления типизации в апстриме записи отсюда будут удаляться.
 [[tool.mypy.overrides]]
 module = [
-    "pynmeagps",
-    "pynmeagps.*",
-    "pyrtcm",
-    "pyrtcm.*",
-    "pygnssutils",
-    "pygnssutils.*",
+  "pynmeagps",
+  "pynmeagps.*",
+  "pyrtcm",
+  "pyrtcm.*",
+  "pygnssutils",
+  "pygnssutils.*",
 ]
 ignore_missing_imports = true
 
@@ -83,6 +83,11 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "PL"]
+ignore = [
+  "RUF001", # ambiguous unicode chars in string literals
+  "RUF002", # ambiguous unicode chars in docstrings
+  "RUF003", # ambiguous unicode chars in comments
+]
 
 [tool.ruff.lint.per-file-ignores]
 # В тестах разрешаем assert, магические числа и длинные функции.

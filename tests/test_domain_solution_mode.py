@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 from ntrip_accuracy_monitor.domain.solution_mode import SolutionMode
 
 

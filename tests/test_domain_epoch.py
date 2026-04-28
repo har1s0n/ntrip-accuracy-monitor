@@ -1,5 +1,7 @@
 from __future__ import annotations
-from datetime import UTC, datetime
+
+from datetime import UTC, datetime, timedelta, timezone
+
 import pytest
 
 from ntrip_accuracy_monitor.domain.epoch import Epoch
@@ -96,8 +98,6 @@ def test_non_positive_dop_or_sigma_raises(field: str) -> None:
 
 
 def test_epoch_time_other_tz_normalized_to_utc() -> None:
-    from datetime import timedelta, timezone
-
     msk = timezone(timedelta(hours=3))
     kwargs = _base_epoch_kwargs() | {
         "epoch_time": datetime(2026, 4, 24, 15, 0, 0, tzinfo=msk)

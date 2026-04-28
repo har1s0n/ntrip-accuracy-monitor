@@ -7,6 +7,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import sqrt
+from typing import Final
+
+_MIN_LATITUDE_DEG: Final[float] = -90.0
+_MAX_LATITUDE_DEG: Final[float] = 90.0
+_MIN_LONGITUDE_DEG: Final[float] = -180.0
+_MAX_LONGITUDE_DEG: Final[float] = 180.0
+_MIN_PLAUSIBLE_HEIGHT_M: Final[float] = -1000.0
+_MAX_PLAUSIBLE_HEIGHT_M: Final[float] = 30000.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,7 +25,7 @@ class GeodeticPosition:
         latitude_deg: широта в градусах, ∈ [-90, 90].
         longitude_deg: долгота в градусах, ∈ [-180, 180].
         ellipsoidal_height_m: эллипсоидальная высота в метрах,
-            ∈ [-1000, 20000] — защитный фильтр от мусора из парсера.
+            ∈ [-1000, 30000] — защитный фильтр от мусора из парсера.
     """
 
     latitude_deg: float
@@ -25,17 +33,17 @@ class GeodeticPosition:
     ellipsoidal_height_m: float
 
     def __post_init__(self) -> None:
-        if not -90.0 <= self.latitude_deg <= 90.0:
+        if not _MIN_LATITUDE_DEG <= self.latitude_deg <= _MAX_LATITUDE_DEG:
             raise ValueError(
                 f"latitude_deg out of range [-90, 90]: {self.latitude_deg!r}"
             )
-        if not -180.0 <= self.longitude_deg <= 180.0:
+        if not _MIN_LONGITUDE_DEG <= self.longitude_deg <= _MAX_LONGITUDE_DEG:
             raise ValueError(
                 f"longitude_deg out of range [-180, 180]: {self.longitude_deg!r}"
             )
-        if not -1000.0 <= self.ellipsoidal_height_m <= 20000.0:
+        if not _MIN_PLAUSIBLE_HEIGHT_M <= self.ellipsoidal_height_m <= _MAX_PLAUSIBLE_HEIGHT_M:
             raise ValueError(
-                "ellipsoidal_height_m out of plausible range [-1000, 20000]: "
+                "ellipsoidal_height_m out of plausible range [-1000, 30000]: "
                 f"{self.ellipsoidal_height_m!r}"
             )
 

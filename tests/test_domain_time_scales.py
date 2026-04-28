@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from datetime import UTC, datetime, timedelta, timezone
+
 import pytest
 
 from ntrip_accuracy_monitor.domain.time_scales import (

@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Self
+from typing import Final, Self
+
+_MAX_GGA_QUALITY: Final[int] = 8
 
 
 class SolutionMode(IntEnum):
@@ -31,7 +33,7 @@ class SolutionMode(IntEnum):
         Raises:
             ValueError: если quality вне диапазона 0..8.
         """
-        if not 0 <= quality <= 8:
+        if not 0 <= quality <= _MAX_GGA_QUALITY:
             raise ValueError(
                 f"GGA quality must be in range 0..8, got {quality!r}"
             )
