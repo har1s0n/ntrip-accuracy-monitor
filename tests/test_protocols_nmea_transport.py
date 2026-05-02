@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager, suppress
 import pytest
 
 from ntrip_accuracy_monitor.protocols.backoff import BackoffPolicy
-from ntrip_accuracy_monitor.protocols.nmea.messages import GgaRecord
+from ntrip_accuracy_monitor.protocols.nmea.messages import GgaRecord, NmeaRecord
 from ntrip_accuracy_monitor.protocols.nmea.transport import NmeaTcpClient
 
 # ---- Helpers ---------------------------------------------------------------
@@ -86,9 +86,9 @@ def _make_client(port: int, *, stall_timeout_s: float = 1.0) -> NmeaTcpClient:
     )
 
 
-async def _take(client: NmeaTcpClient, n: int, *, timeout_s: float = 5.0) -> list:
+async def _take(client: NmeaTcpClient, n: int, *, timeout_s: float = 5.0) -> list[NmeaRecord]:
     """Прочитать ровно n record-ов из клиента или упасть по таймауту."""
-    out: list = []
+    out: list[NmeaRecord] = []
 
     async def consume() -> None:
         async for rec in client:

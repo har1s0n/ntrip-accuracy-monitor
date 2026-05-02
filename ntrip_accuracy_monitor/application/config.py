@@ -30,6 +30,8 @@ from pydantic import (
     model_validator,
 )
 
+from ntrip_accuracy_monitor.protocols.backoff import BackoffPolicy
+
 _PG_PASSWORD_ENV: str = "PG_PASSWORD"
 _NTRIP_UPSTREAM_PASSWORD_ENV: str = "NTRIP_UPSTREAM_PASSWORD"
 
@@ -58,13 +60,43 @@ class PostgresConfig(BaseModel):
         return self
 
 
+class BackoffConfig(BaseModel):
+    """TOML-friendly mirror of BackoffPolicy.
+
+    Translated to the runtime BackoffPolicy via to_policy() at app
+    startup. Defaults follow RTCM 10410.1 §5 implementation note about
+    increasing wait times between retries (1s → cap 60s, factor 2).
+    """
+
+    initial_delay_s: float = Field(default=1.0, gt=0.0)
+    max_delay_s: float = Field(default=60.0, gt=0.0)
+    multiplier: float = Field(default=2.0, gt=1.0)
+    jitter: float = Field(default=0.1, ge=0.0)
+
+    @model_validator(mode="after")
+    def max_ge_initial(self) -> Self:
+        if self.max_delay_s < self.initial_delay_s:
+            raise ValueError(
+                f"max_delay_s ({self.max_delay_s}) must be >= "
+                f"initial_delay_s ({self.initial_delay_s})"
+            )
+        return self
+
+    def to_policy(self) -> BackoffPolicy:
+        return BackoffPolicy(
+            initial_delay_s=self.initial_delay_s,
+            max_delay_s=self.max_delay_s,
+            multiplier=self.multiplier,
+            jitter=self.jitter,
+        )
+
+
 class NtripCasterConfig(BaseModel):
     """Параметры собственного NTRIP-кастера, отдающего RTCM роверу."""
 
     host: str = "0.0.0.0"
     port: int = Field(default=2101, ge=1, le=65535)
     mountpoint: str
-    # auth для собственного кастера — в чате №6
 
 
 class NtripUpstreamConfig(BaseModel):
@@ -80,6 +112,12 @@ class NtripUpstreamConfig(BaseModel):
     mountpoint: str | None = None
     user: str | None = None
     password: SecretStr | None = None
+
+    ntrip_version: Literal["1.0", "2.0"] = "2.0"
+    connect_timeout_s: float = Field(default=10.0, gt=0.0)
+    stall_timeout_s: float = Field(default=15.0, gt=0.0)
+    queue_max_size: int = Field(default=1024, ge=16)
+    backoff: BackoffConfig = BackoffConfig()
 
     @model_validator(mode="after")
     def required_when_enabled(self) -> Self:

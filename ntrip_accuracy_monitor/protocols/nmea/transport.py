@@ -51,7 +51,7 @@ class NmeaTcpClient:
     коннект → мгновенный разрыв без полезных данных).
     """
 
-    def __init__(
+    def     __init__(
         self,
         *,
         stream_id: str,

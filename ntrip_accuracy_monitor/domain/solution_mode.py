@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Final, Self
+from typing import Final, Self, assert_never
 
 _MAX_GGA_QUALITY: Final[int] = 8
 
@@ -59,7 +59,7 @@ class SolutionMode(IntEnum):
         return self is not SolutionMode.INVALID
 
     @property
-    def human_name(self) -> str | None:
+    def human_name(self) -> str:
         """Читаемое имя для отчётов и логов."""
         match self:
             case SolutionMode.INVALID:
@@ -80,7 +80,8 @@ class SolutionMode(IntEnum):
                 return "Manual"
             case SolutionMode.SIMULATOR:
                 return "Simulator"
-        return None
+            case _:
+                assert_never(self)
 
     def __str__(self) -> str:
         return self.human_name
