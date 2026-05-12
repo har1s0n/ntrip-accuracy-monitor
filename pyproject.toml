@@ -23,7 +23,6 @@ dependencies = [
   "pydantic>=2.10",
   "pynmeagps>=1.0.43",
   "pyrtcm>=1.1.9",
-  "pygnssutils>=1.1.21",
   "pyproj>=3.7.0",
   "numpy>=2.2",
 ]

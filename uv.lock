@@ -461,7 +461,6 @@ dependencies = [
     { name = "asyncpg" },
     { name = "numpy" },
     { name = "pydantic" },
-    { name = "pygnssutils" },
     { name = "pynmeagps" },
     { name = "pyproj" },
     { name = "pyrtcm" },
@@ -489,7 +488,6 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.2" },
     { name = "pandas", marker = "extra == 'analysis'", specifier = ">=2.2" },
     { name = "pydantic", specifier = ">=2.10" },
-    { name = "pygnssutils", specifier = ">=1.1.21" },
     { name = "pynmeagps", specifier = ">=1.0.43" },
     { name = "pyproj", specifier = ">=3.7.0" },
     { name = "pyrtcm", specifier = ">=1.1.9" },
@@ -558,15 +556,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661", size = 228134, upload-time = "2026-04-24T20:15:23.917Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e", size = 100195, upload-time = "2026-04-24T20:15:22.081Z" },
-]
-
-[[package]]
-name = "paho-mqtt"
-version = "2.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/39/15/0a6214e76d4d32e7f663b109cf71fb22561c2be0f701d67f93950cd40542/paho_mqtt-2.1.0.tar.gz", hash = "sha256:12d6e7511d4137555a3f6ea167ae846af2c7357b10bc6fa4f7c3968fc1723834", size = 148848, upload-time = "2024-04-29T19:52:55.591Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c4/cb/00451c3cf31790287768bb12c6bec834f5d292eaf3022afc88e14b8afc94/paho_mqtt-2.1.0-py3-none-any.whl", hash = "sha256:6db9ba9b34ed5bc6b6e3812718c7e06e2fd7444540df2455d2c51bd58808feee", size = 67219, upload-time = "2024-04-29T19:52:48.345Z" },
 ]
 
 [[package]]
@@ -770,26 +759,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pygnssutils"
-version = "1.1.22"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "certifi" },
-    { name = "paho-mqtt" },
-    { name = "pyqgc" },
-    { name = "pysbf2" },
-    { name = "pyserial" },
-    { name = "pyspartn" },
-    { name = "pyubx2" },
-    { name = "pyubxutils" },
-    { name = "pyunigps" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/40/94/a9c34195d4b26abe0d49dcfa3a35c2cddc2c6b67553f4d852c6a20fe2535/pygnssutils-1.1.22.tar.gz", hash = "sha256:a6e994d9f4cefe6b941c4c9e2fb7f70b384b5f73645493a487e59115ca024c4a", size = 94905, upload-time = "2026-02-09T11:02:23.113Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/28/55ea9700186099a1082147be26b7727c52032cec61cdb292b07304b0f10c/pygnssutils-1.1.22-py3-none-any.whl", hash = "sha256:736977a11ff17f25270338e0b697db768438e454a5606de56fabbbc2e69fd760", size = 68174, upload-time = "2026-02-09T11:02:21.718Z" },
-]
-
-[[package]]
 name = "pynmeagps"
 version = "1.1.3"
 source = { registry = "https://pypi.org/simple" }
@@ -855,19 +824,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyqgc"
-version = "0.2.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pynmeagps" },
-    { name = "pyrtcm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/33/10/737028bab6b2387657d78ce5f3d3e94146b631e620affdb1f1633e0114e0/pyqgc-0.2.2.tar.gz", hash = "sha256:3ad3fe6e865951d05cc87307f7263d4f5bd0a8023bec9beb24501310afbc0671", size = 40087, upload-time = "2026-02-27T11:14:04.497Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/58/d7d41000817ca6b74e4f38048b9b5ff979ab69ce20716af4c9cdbc767cca/pyqgc-0.2.2-py3-none-any.whl", hash = "sha256:8373f0375d99c48bf59b60152b77f5b1eda0a72745c9b3182e9e1ec94144460f", size = 25699, upload-time = "2026-02-27T11:14:02.742Z" },
-]
-
-[[package]]
 name = "pyrtcm"
 version = "1.1.12"
 source = { registry = "https://pypi.org/simple" }
@@ -877,37 +833,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/be/99/9f87002c6c26a8e6d671f99244d87efcb3d3f27b4559ca368e8541bbe9c9/pyrtcm-1.1.12.tar.gz", hash = "sha256:dfc86ae158c901e56d296e02f00b7886c4dbc5b453380c67b8722678ab8eb68e", size = 100598, upload-time = "2026-03-21T16:34:29.039Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/84/e8/02570e158b2467e8c1aa40377ae82dd325129174d378ad468a23da2047c1/pyrtcm-1.1.12-py3-none-any.whl", hash = "sha256:0162ee5f8ef75666165f3261febd741f3ae6d0d295af665fcbf11986f8d9ba8e", size = 42784, upload-time = "2026-03-21T16:34:27.863Z" },
-]
-
-[[package]]
-name = "pysbf2"
-version = "1.0.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pynmeagps" },
-    { name = "pyrtcm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/df/27/e56a2a54a3ee4e938d2373160cfd8943f023655f0fe6f559ffc5cfc48560/pysbf2-1.0.4.tar.gz", hash = "sha256:916f0c2964fc1f9ca4061bdfdb1176f58858aac57d75182424cb9a02360742b3", size = 71307, upload-time = "2026-03-09T11:31:37.392Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/cf/09f60712a6af633a90c01be7144243fcb715443f3e5e5fff95614c076ce1/pysbf2-1.0.4-py3-none-any.whl", hash = "sha256:9efe1d69bbc3002f4e63d9856681570de23e50c92527f96bc604cde75ffc4212", size = 35048, upload-time = "2026-03-09T11:31:36.103Z" },
-]
-
-[[package]]
-name = "pyserial"
-version = "3.5"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1e/7d/ae3f0a63f41e4d2f6cb66a5b57197850f919f59e558159a4dd3a818f5082/pyserial-3.5.tar.gz", hash = "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb", size = 159125, upload-time = "2020-11-23T03:59:15.045Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/bc/587a445451b253b285629263eb51c2d8e9bcea4fc97826266d186f96f558/pyserial-3.5-py2.py3-none-any.whl", hash = "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0", size = 90585, upload-time = "2020-11-23T03:59:13.41Z" },
-]
-
-[[package]]
-name = "pyspartn"
-version = "1.0.9"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1c/c9/db2c3513644865094ec89e8434ddbb545e2b0c6a3ab4ca72559b66778e15/pyspartn-1.0.9.tar.gz", hash = "sha256:44db0f366b004e5a8971b1cd64896a5d701cf4e4b6111c3b06141709010c692d", size = 80565, upload-time = "2026-03-11T10:14:45.691Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/5b/029c5b2745f856acffb7b8c952771cc6eab01ef16ef27885466943f4cff3/pyspartn-1.0.9-py3-none-any.whl", hash = "sha256:a16f7f965ff2d16f05635467d2476607481309e26b9b8e7246f9500024f9e432", size = 34985, upload-time = "2026-03-11T10:14:43.522Z" },
 ]
 
 [[package]]
@@ -962,45 +887,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
-]
-
-[[package]]
-name = "pyubx2"
-version = "1.2.60"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pynmeagps" },
-    { name = "pyrtcm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/19/a1dbd23304790674001cddf5937247608ff22b3550ef39e98aad4a2f3437/pyubx2-1.2.60.tar.gz", hash = "sha256:96b3d437be9690a07d88e14d4029a99b568d5c95485496bf786ecbaf1dd36dff", size = 171973, upload-time = "2026-02-25T19:33:15.46Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/d9/f8b87ba35ee0663af5afee126e840a26907dd40a41cca8796bd402108875/pyubx2-1.2.60-py3-none-any.whl", hash = "sha256:f4f2d88c2b38057fe245144ae884902b2ff7d46594841f1468bc6e1765606710", size = 76652, upload-time = "2026-02-25T19:33:14.114Z" },
-]
-
-[[package]]
-name = "pyubxutils"
-version = "1.0.6"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyserial" },
-    { name = "pyubx2" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/91/80/b90f04b6c082aefa5af1217e530e4fd29e5fd351e5124056c47e06e53c53/pyubxutils-1.0.6.tar.gz", hash = "sha256:87ab81b65e96d6ec533936fd7c540b3f2291cf6ed963514d6fabb9b8cb2b6fef", size = 30876, upload-time = "2026-02-11T18:13:16.125Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/dc/819951f5eacb450591705b6d2dfd10177cd47e3d791ddaf78fb2620e9faf/pyubxutils-1.0.6-py3-none-any.whl", hash = "sha256:71e44929cd0b8bd1e6ff01b94566d8b114d70f79cb5cf8540baca2fbbf085b92", size = 33182, upload-time = "2026-02-11T18:13:14.903Z" },
-]
-
-[[package]]
-name = "pyunigps"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pynmeagps" },
-    { name = "pyrtcm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/81/ef/ff3a74af365750d757c3675f16c34f4faad7f27eab9140e689cce256ef4a/pyunigps-1.0.0.tar.gz", hash = "sha256:01f7298df8eff8beaad03c2b3a8fd0ddc9781096a210ceaf97a2bbf0b0ee6eba", size = 69859, upload-time = "2026-03-26T08:31:44.012Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/c3/c56723ad4e9beb09be40b3696dddb61287fbdc00e074b5eb273e330afdec/pyunigps-1.0.0-py3-none-any.whl", hash = "sha256:98e3c5251ef318558528ef36f1de2ff7b6d13365408347fde7d9d813da7f8eb4", size = 33455, upload-time = "2026-03-26T08:31:42.85Z" },
 ]
 
 [[package]]

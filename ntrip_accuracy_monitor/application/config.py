@@ -5,13 +5,15 @@
 выполняется на этапе model_validate().
 
 Чувствительные поля НИКОГДА не читаются из TOML:
-  — PG_PASSWORD (обязательная) → postgres.password.
-  — NTRIP_UPSTREAM_PASSWORD (опциональная) → upstream.password.
+  — PG_PASSWORD                  (обязательная) → postgres.password.
+  — UPSTREAM_NTRIP_PASSWORD       (опциональная) → upstream_ntrip.password.
 Если пароль случайно оказался в TOML, он молча отбрасывается и
 замещается значением из env (либо отсутствует).
 
-Проектное решение: Подмешивание env происходит в load_config() — единственное
-место в проекте, где читается os.environ.
+Терминология:
+  local_caster      — наш собственный NtripCasterServer (раздаёт RTCM роверам);
+  upstream_ntrip    — внешний NTRIP-источник RTCM (RS3 #1, BKG, IGS, EUREF-IP);
+  nmea_receivers    — TCP-источники NMEA от приёмников EFT RS3.
 """
 
 from __future__ import annotations
@@ -33,10 +35,11 @@ from pydantic import (
 from ntrip_accuracy_monitor.protocols.backoff import BackoffPolicy
 
 _PG_PASSWORD_ENV: str = "PG_PASSWORD"
-_NTRIP_UPSTREAM_PASSWORD_ENV: str = "NTRIP_UPSTREAM_PASSWORD"
+_UPSTREAM_NTRIP_PASSWORD_ENV: str = "UPSTREAM_NTRIP_PASSWORD"
+_LOCAL_CASTER_PASSWORD_ENV: str = "LOCAL_CASTER_PASSWORD"
 
 _EFT_RS3_DEFAULT_NMEA_PORT: int = 9001
-"""Штатный TCP-порт NMEA на EFT RS3; используется как default в StreamConfig."""
+"""Штатный TCP-порт NMEA на EFT RS3."""
 
 
 class PostgresConfig(BaseModel):
@@ -61,12 +64,7 @@ class PostgresConfig(BaseModel):
 
 
 class BackoffConfig(BaseModel):
-    """TOML-friendly mirror of BackoffPolicy.
-
-    Translated to the runtime BackoffPolicy via to_policy() at app
-    startup. Defaults follow RTCM 10410.1 §5 implementation note about
-    increasing wait times between retries (1s → cap 60s, factor 2).
-    """
+    """TOML-friendly mirror of BackoffPolicy."""
 
     initial_delay_s: float = Field(default=1.0, gt=0.0)
     max_delay_s: float = Field(default=60.0, gt=0.0)
@@ -91,20 +89,31 @@ class BackoffConfig(BaseModel):
         )
 
 
-class NtripCasterConfig(BaseModel):
-    """Параметры собственного NTRIP-кастера, отдающего RTCM роверу."""
+class LocalCasterConfig(BaseModel):
+    """Параметры собственного NTRIP-кастера (наш NtripCasterServer).
+
+    Раздаёт RTCM роверам RS3 #2/#3, которые подключаются к нему
+    как Ntrip-клиенты.
+    """
 
     host: str = "0.0.0.0"
     port: int = Field(default=2101, ge=1, le=65535)
     mountpoint: str
 
+    # Basic auth. Если оба None — кастер отдаёт mountpoint без аутентификации.
+    username: str | None = None
+    password: SecretStr | None = None
 
-class NtripUpstreamConfig(BaseModel):
-    """Апстрим NTRIP-источник (внешний кастер), если используется.
+    sourcetable_country: str = Field(default="POL", min_length=3, max_length=3)
+    subscriber_queue_size: int = Field(default=256, ge=1)
+    handshake_timeout_s: float = Field(default=10.0, gt=0)
 
-    Поле `password` принимается только через переменную окружения
-    NTRIP_UPSTREAM_PASSWORD (см. load_config). Наличие пароля в TOML
-    игнорируется.
+
+class UpstreamNtripConfig(BaseModel):
+    """Внешний NTRIP-источник RTCM (RS3 #1 как Ntrip-Caster, BKG, IGS, EUREF-IP).
+
+    К нему подключается наш NtripClient. Поле `password` принимается
+    только через переменную окружения UPSTREAM_NTRIP_PASSWORD.
     """
 
     enabled: bool = False
@@ -123,29 +132,29 @@ class NtripUpstreamConfig(BaseModel):
     def required_when_enabled(self) -> Self:
         if self.enabled and (self.url is None or self.mountpoint is None):
             raise ValueError(
-                "upstream.enabled=true requires both 'url' and 'mountpoint'"
+                "upstream_ntrip.enabled=true requires both 'url' and 'mountpoint'"
             )
         return self
 
 
-class StreamConfig(BaseModel):
-    """Один NMEA-источник (приёмник EFT RS3)."""
+class NmeaReceiverConfig(BaseModel):
+    """Один TCP-источник NMEA — приёмник EFT RS3."""
 
-    stream_id: str
+    receiver_id: str
     host: str
     port: int = Field(default=_EFT_RS3_DEFAULT_NMEA_PORT, ge=1, le=65535)
     role: Literal["base", "rover_rtk", "rover_spp"]
 
-    @field_validator("stream_id")
+    @field_validator("receiver_id")
     @classmethod
-    def stream_id_non_empty(cls, v: str) -> str:
+    def receiver_id_non_empty(cls, v: str) -> str:
         if not v.strip():
-            raise ValueError("stream_id must be a non-empty string")
+            raise ValueError("receiver_id must be a non-empty string")
         return v
 
 
-class ReferenceConfig(BaseModel):
-    """Эталонные координаты общей антенны (из RTKLIB пост-обработки)."""
+class ReferenceAntennaConfig(BaseModel):
+    """Эталонные координаты общей антенны №2 (из RTKLIB пост-обработки)."""
 
     latitude_deg: float = Field(ge=-90.0, le=90.0)
     longitude_deg: float = Field(ge=-180.0, le=180.0)
@@ -158,18 +167,22 @@ class AppConfig(BaseModel):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     postgres: PostgresConfig
-    caster: NtripCasterConfig
-    upstream: NtripUpstreamConfig = NtripUpstreamConfig()
-    streams: list[StreamConfig] = Field(min_length=1)
-    reference: ReferenceConfig
+    local_caster: LocalCasterConfig
+    upstream_ntrip: UpstreamNtripConfig = UpstreamNtripConfig()
+    nmea_receivers: list[NmeaReceiverConfig] = Field(min_length=1)
+    reference_antenna: ReferenceAntennaConfig
 
-    @field_validator("streams")
+    @field_validator("nmea_receivers")
     @classmethod
-    def stream_ids_unique(cls, v: list[StreamConfig]) -> list[StreamConfig]:
-        ids = [s.stream_id for s in v]
+    def receiver_ids_unique(
+        cls, v: list[NmeaReceiverConfig],
+    ) -> list[NmeaReceiverConfig]:
+        ids = [r.receiver_id for r in v]
         if len(ids) != len(set(ids)):
             duplicates = sorted({x for x in ids if ids.count(x) > 1})
-            raise ValueError(f"stream_id values must be unique; duplicates: {duplicates}")
+            raise ValueError(
+                f"receiver_id values must be unique; duplicates: {duplicates}"
+            )
         return v
 
 
@@ -177,21 +190,12 @@ def load_config(path: Path) -> AppConfig:
     """Загрузить TOML, подмешать пароли из env, провалидировать.
 
     Env-переменные:
-        PG_PASSWORD: обязательная, пароль PostgreSQL.
-        NTRIP_UPSTREAM_PASSWORD: опциональная, пароль для upstream NTRIP.
-
-    Args:
-        path: путь к config.toml.
-
-    Returns:
-        Провалидированный AppConfig.
+        PG_PASSWORD: обязательная.
+        UPSTREAM_NTRIP_PASSWORD: опциональная.
 
     Raises:
-        ValueError: если PG_PASSWORD не задана в env, либо если секция
-            postgres/upstream в TOML не является таблицей.
-        FileNotFoundError: если файл не существует.
-        tomllib.TOMLDecodeError: если TOML синтаксически некорректен.
-        pydantic.ValidationError: при нарушении схемы.
+        ValueError: если PG_PASSWORD не задана либо секции некорректны.
+        FileNotFoundError, tomllib.TOMLDecodeError, pydantic.ValidationError.
     """
     with path.open("rb") as f:
         raw: dict[str, object] = tomllib.load(f)
@@ -204,16 +208,25 @@ def load_config(path: Path) -> AppConfig:
     postgres_section = raw.setdefault("postgres", {})
     if not isinstance(postgres_section, dict):
         raise ValueError("'postgres' section must be a TOML table")
-    postgres_section.pop("password", None)  # не доверяем TOML для секретов
+    postgres_section.pop("password", None)
     postgres_section["password"] = pg_password
 
-    # --- NTRIP_UPSTREAM_PASSWORD: опциональна, только из env ---
-    upstream_section = raw.get("upstream")
+    caster_section = raw.get("local_caster")
+    if caster_section is not None and not isinstance(caster_section, dict):
+        raise ValueError("'local_caster' section must be a TOML table")
+    if isinstance(caster_section, dict):
+        caster_section.pop("password", None)
+        caster_password = os.environ.get(_LOCAL_CASTER_PASSWORD_ENV)
+        if caster_password is not None:
+            caster_section["password"] = caster_password
+
+    # --- UPSTREAM_NTRIP_PASSWORD: опциональна, только из env ---
+    upstream_section = raw.get("upstream_ntrip")
     if upstream_section is not None and not isinstance(upstream_section, dict):
-        raise ValueError("'upstream' section must be a TOML table")
+        raise ValueError("'upstream_ntrip' section must be a TOML table")
     if isinstance(upstream_section, dict):
-        upstream_section.pop("password", None)  # пароль в TOML игнорируется
-        ntrip_password = os.environ.get(_NTRIP_UPSTREAM_PASSWORD_ENV)
+        upstream_section.pop("password", None)
+        ntrip_password = os.environ.get(_UPSTREAM_NTRIP_PASSWORD_ENV)
         if ntrip_password is not None:
             upstream_section["password"] = ntrip_password
 

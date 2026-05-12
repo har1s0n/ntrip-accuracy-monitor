@@ -2,8 +2,8 @@
 # Скопировать в config.toml и отредактировать.
 #
 # Пароли задаются ТОЛЬКО через переменные окружения (в .env или в shell):
-#   PG_PASSWORD               — обязателен, пароль PostgreSQL.
-#   NTRIP_UPSTREAM_PASSWORD   — опционален, пароль для upstream NTRIP.
+#   PG_PASSWORD                — обязателен, пароль PostgreSQL.
+#   UPSTREAM_NTRIP_PASSWORD    — опционален, пароль для внешнего NTRIP-источника.
 # Если пароль указан в TOML — он молча отбрасывается.
 
 log_level = "INFO"
@@ -17,39 +17,50 @@ user = "ntrip_user"
 min_pool_size = 2
 max_pool_size = 10
 
-[caster]
-# Собственный NTRIP-кастер, отдающий RTCM роверу №2
+[local_caster]
+# Собственный NTRIP-кастер. Раздаёт RTCM роверам RS3 #2/#3.
 host = "0.0.0.0"
 port = 2101
 mountpoint = "EFT_BASE"
+# Раскомментировать для anonymous → auth:
+# username = "monitor"
+# password — из env (если включено выше); см. дополнение в config.py
+sourcetable_country = "POL"
+subscriber_queue_size = 256
+handshake_timeout_s = 10.0
 
-[upstream]
-# Внешний NTRIP-источник — выключен по умолчанию.
-# password — из env NTRIP_UPSTREAM_PASSWORD.
+[upstream_ntrip]
+# Внешний NTRIP-источник RTCM: RS3 #1 как Ntrip-Caster, BKG, IGS, EUREF-IP.
+# password — из env UPSTREAM_NTRIP_PASSWORD.
 enabled = false
-# url = "http://rtk2go.com:2101"
-# mountpoint = "some_mount"
-# user = "user@example.com"
+# Пример для RS3 #1 в роли Ntrip-Caster (см. чат №5.1):
+# url = "http://192.168.1.40:9002"
+# mountpoint = "TESTRS3CAST0"
+# ntrip_version = "1.0"
+# Пример для BKG EUREF-IP:
+# url = "http://euref-ip.net:2101"
+# mountpoint = "IZAN00ESP0"
+# user = "your-user@example.com"
+# ntrip_version = "2.0"
 
-# NMEA-источники (приёмники EFT RS3). Минимум один.
-# port по умолчанию 9001 — штатный TCP-порт NMEA на EFT RS3.
-[[streams]]
-stream_id = "base"
+# NMEA-источники — приёмники EFT RS3. Минимум один.
+[[nmea_receivers]]
+receiver_id = "base"
 host = "192.168.77.137"
 role = "base"
 
-[[streams]]
-stream_id = "rover_rtk"
+[[nmea_receivers]]
+receiver_id = "rover_rtk"
 host = "192.168.77.138"
 role = "rover_rtk"
 
-[[streams]]
-stream_id = "rover_spp"
+[[nmea_receivers]]
+receiver_id = "rover_spp"
 host = "192.168.77.139"
 role = "rover_spp"
 
-[reference]
-# Эталонные координаты антенны №2 из пост-обработки RTKLIB
+[reference_antenna]
+# Эталонные координаты общей антенны №2 из пост-обработки RTKLIB
 latitude_deg = 55.7558
 longitude_deg = 37.6173
 ellipsoidal_height_m = 187.5

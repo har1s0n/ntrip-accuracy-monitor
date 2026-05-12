@@ -57,7 +57,7 @@ from ntrip_accuracy_monitor.protocols.ntrip._gga import static_gga_provider
 _DEFAULT_HOST = "192.168.1.40"
 _DEFAULT_PORT = 9002
 _DEFAULT_MOUNTPOINT = "TESTRS3CAST0"
-_DEFAULT_DURATION_S = 10.0
+_DEFAULT_DURATION_S = 60.0
 
 # Watchdog/connect tunings — tighter than the public-caster probe because
 # this is LAN: connect should be sub-second, stall is suspect after 5 s.

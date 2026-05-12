@@ -33,7 +33,6 @@ from ntrip_accuracy_monitor.protocols.ntrip._framer import (
     stream_rtcm_frames,
 )
 from ntrip_accuracy_monitor.protocols.backoff import BackoffPolicy
-from ntrip_accuracy_monitor.protocols.ntrip._framer import stream_rtcm_frames
 from ntrip_accuracy_monitor.protocols.ntrip._handshake import (
     HandshakeParseError,
     NtripResponse,

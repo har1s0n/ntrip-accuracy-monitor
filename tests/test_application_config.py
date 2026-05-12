@@ -18,24 +18,24 @@ user = "ntrip_user"
 min_pool_size = 2
 max_pool_size = 10
 
-[caster]
+[local_caster]
 host = "0.0.0.0"
 port = 2101
 mountpoint = "EFT_BASE"
 
-[[streams]]
-stream_id = "base"
+[[nmea_receivers]]
+receiver_id = "base"
 host = "192.168.1.10"
 port = 9001
 role = "base"
 
-[[streams]]
-stream_id = "rover_rtk"
+[[nmea_receivers]]
+receiver_id = "rover_rtk"
 host = "192.168.1.11"
 port = 9001
 role = "rover_rtk"
 
-[reference]
+[reference_antenna]
 latitude_deg = 55.7558
 longitude_deg = 37.6173
 ellipsoidal_height_m = 187.5
@@ -58,8 +58,8 @@ def test_load_config_happy_path(
     assert cfg.log_level == "DEBUG"
     assert cfg.postgres.database == "ntrip_monitor"
     assert cfg.postgres.password.get_secret_value() == "s3cret"
-    assert len(cfg.streams) == 2
-    assert cfg.upstream.enabled is False
+    assert len(cfg.nmea_receivers) == 2
+    assert cfg.upstream_ntrip.enabled is False
 
 
 def test_missing_pg_password_raises(
@@ -75,7 +75,7 @@ def test_duplicate_stream_ids_raise(
 ) -> None:
     monkeypatch.setenv("PG_PASSWORD", "s3cret")
     duplicated = _MINIMAL_TOML.replace(
-        'stream_id = "rover_rtk"', 'stream_id = "base"'
+        'receiver_id = "rover_rtk"', 'receiver_id = "base"'
     )
     with pytest.raises(ValidationError, match="unique"):
         load_config(_write_toml(tmp_path, duplicated))
@@ -101,12 +101,12 @@ log_level = "INFO"
 database = "db"
 user = "u"
 
-[caster]
+[local_caster]
 mountpoint = "M"
 
-streams = []
+nmea_receivers = []
 
-[reference]
+[reference_antenna]
 latitude_deg = 0.0
 longitude_deg = 0.0
 ellipsoidal_height_m = 0.0
@@ -120,7 +120,7 @@ def test_upstream_enabled_requires_url_and_mountpoint(
 ) -> None:
     monkeypatch.setenv("PG_PASSWORD", "s3cret")
     with_broken_upstream = _MINIMAL_TOML + """
-[upstream]
+[upstream_ntrip]
 enabled = true
 """
     with pytest.raises(ValidationError, match="url"):
@@ -137,7 +137,7 @@ def test_password_not_leaked_in_repr(
 
 
 _UPSTREAM_ENABLED_TOML = _MINIMAL_TOML + """
-[upstream]
+[upstream_ntrip]
 enabled = true
 url = "http://rtk2go.com:2101"
 mountpoint = "RTK2GO_1"
@@ -149,13 +149,13 @@ def test_ntrip_upstream_password_from_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("PG_PASSWORD", "pg_secret")
-    monkeypatch.setenv("NTRIP_UPSTREAM_PASSWORD", "ntrip_secret")
+    monkeypatch.setenv("UPSTREAM_NTRIP_PASSWORD", "ntrip_secret")
 
     cfg = load_config(_write_toml(tmp_path, _UPSTREAM_ENABLED_TOML))
 
-    assert cfg.upstream.enabled is True
-    assert cfg.upstream.password is not None
-    assert cfg.upstream.password.get_secret_value() == "ntrip_secret"
+    assert cfg.upstream_ntrip.enabled is True
+    assert cfg.upstream_ntrip.password is not None
+    assert cfg.upstream_ntrip.password.get_secret_value() == "ntrip_secret"
 
 
 def test_ntrip_upstream_password_absent_is_ok_when_not_provided(
@@ -163,12 +163,12 @@ def test_ntrip_upstream_password_absent_is_ok_when_not_provided(
 ) -> None:
     """Upstream может работать без пароля (анонимный кастер)."""
     monkeypatch.setenv("PG_PASSWORD", "pg_secret")
-    monkeypatch.delenv("NTRIP_UPSTREAM_PASSWORD", raising=False)
+    monkeypatch.delenv("UPSTREAM_NTRIP_PASSWORD", raising=False)
 
     cfg = load_config(_write_toml(tmp_path, _UPSTREAM_ENABLED_TOML))
 
-    assert cfg.upstream.enabled is True
-    assert cfg.upstream.password is None
+    assert cfg.upstream_ntrip.enabled is True
+    assert cfg.upstream_ntrip.password is None
 
 
 def test_password_in_toml_is_ignored_postgres(
@@ -191,14 +191,14 @@ def test_password_in_toml_is_ignored_upstream(
 ) -> None:
     """Пароль upstream в TOML отбрасывается, даже если env не задан."""
     monkeypatch.setenv("PG_PASSWORD", "pg_secret")
-    monkeypatch.delenv("NTRIP_UPSTREAM_PASSWORD", raising=False)
+    monkeypatch.delenv("UPSTREAM_NTRIP_PASSWORD", raising=False)
 
     toml_with_upstream_password = _UPSTREAM_ENABLED_TOML + 'password = "toml_loses"\n'
 
     cfg = load_config(_write_toml(tmp_path, toml_with_upstream_password))
 
     # env не задан → пароль None; TOML-значение проигнорировано
-    assert cfg.upstream.password is None
+    assert cfg.upstream_ntrip.password is None
 
 
 def test_stream_port_defaults_to_9001(
@@ -214,18 +214,18 @@ log_level = "INFO"
 database = "ntrip_monitor"
 user = "ntrip_user"
 
-[caster]
+[local_caster]
 mountpoint = "EFT_BASE"
 
-[[streams]]
-stream_id = "base"
+[[nmea_receivers]]
+receiver_id = "base"
 host = "192.168.1.10"
 role = "base"
 
-[reference]
+[reference_antenna]
 latitude_deg = 0.0
 longitude_deg = 0.0
 ellipsoidal_height_m = 0.0
 """
     cfg = load_config(_write_toml(tmp_path, toml_without_port))
-    assert cfg.streams[0].port == 9001
+    assert cfg.nmea_receivers[0].port == 9001

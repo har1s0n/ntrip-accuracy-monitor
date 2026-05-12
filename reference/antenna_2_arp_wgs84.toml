@@ -1,0 +1,65 @@
+# Эталонные координаты антенны АМСА-3 №2 (общая для роверов EFT RS3 #2 и #3)
+# Получены пост-обработкой статического короткого базиса в RTKLIB.
+#
+# ВАЖНО: sigma_*_mm — это empirical σ (разброс позиций по эпохам после
+# multipath-bias), а НЕ formal SE из Kalman-фильтра. Formal SE здесь
+# составляет 0.06–0.10 мм по NEU и не отражает реальную неопределённость
+# в условиях urban canyon. Empirical σ — реалистичная оценка, которую
+# downstream-задачи проекта ntrip-accuracy-monitor должны использовать
+# как нижнюю границу неопределённости эталона.
+
+processed_at         = "2026-05-07T00:00:00Z"
+session_start        = "2026-05-06T00:00:00Z"   # GPST, начало RAW
+session_end          = "2026-05-06T13:09:30Z"   # GPST, конец RAW
+session_duration_s   = 47370                    # 13 ч 09 мин 30 с
+
+[ecef_wgs84_m]
+x          = 2848205.3732
+y          = 2162976.6207
+z          = 5263647.7662
+sigma_x_mm = 14   # empirical, propagated из σ_NEU через ENU→ECEF rotation
+sigma_y_mm = 15   # empirical
+sigma_z_mm = 14   # empirical
+
+[llh_wgs84]
+lat_deg              =     55.984304296
+lon_deg              =     37.213667733
+height_ellipsoidal_m =    220.7379
+sigma_n_mm           =      8.6   # empirical
+sigma_e_mm           =     16.8   # empirical
+sigma_u_mm           =     15.2   # empirical
+
+[quality]
+fixed_epoch_ratio       = 0.765                            # < 0.80; см. notes
+ratio_min               = 3.00                             # ≥ 3.0 ✓ (915/915)
+ratio_median            = 13.4
+ratio_mean              = 51.6
+epochs_in_solution      = 672                              # после фильтра σ_formal ≤ 5 мм
+epochs_q1_total         = 915
+epochs_total            = 1196
+baseline_length_m       = 0.8462                           # совпадает с физ. 0.85 ±0.05 ✓
+processing_engine       = "RTKLIB rnx2rtkp 2.4.3 b34"
+ephemeris_source        = "broadcast"
+
+[processing]
+gnss_used                = "GPS + Galileo"                  # GLO/BDS/QZSS исключены
+frequencies              = "L1+L2"
+positioning_mode         = "Static / Forward"
+elevation_mask_deg       = 15
+elmask_for_ar_deg        = 15
+ionosphere_model         = "broadcast"
+troposphere_model        = "Saastamoinen"
+ar_mode                  = "Continuous"
+ar_min_lock_count        = 10
+ar_min_fix_for_hold      = 20
+ar_validation_threshold  = 3.0
+antenna_correction       = "none (NONE/NONE, идентичные АМСА-3, PCO/PCV сокращается в DD)"
+
+[notes]
+multipath_environment   = "urban-canyon, обе антенны на фасаде здания"
+empirical_to_formal_ratio_n = 5.7   # σ_emp / σ_formal по N
+empirical_to_formal_ratio_e = 8.4
+empirical_to_formal_ratio_u = 5.6
+deviation_from_methodology  = "fix_ratio 0.765 vs 0.80 (§4.1); обосновано multipath-потолком"
+cross_check_q1_vs_q2_mm     = "Δlat=-12, Δlon=-16, Δh=-6 (систематика multipath bias)"
+formal_se_xyz_mm            = "0.07 / 0.07 / 0.06 — НЕ использовать как σ; см. empirical"
