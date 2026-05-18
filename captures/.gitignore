@@ -1,0 +1,5 @@
+# captures/.gitignore
+# В репозиторий попадает только README.
+*
+!.gitignore
+!README.md
