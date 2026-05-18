@@ -9,10 +9,10 @@
 log_level = "INFO"
 
 [postgres]
-host = "localhost"
+host = "127.0.0.1"
 port = 5432
-database = "ntrip_monitor"
-user = "ntrip_user"
+database = "ntrip_accuracy_monitor"
+user = "ntrip_app"
 # password — из env PG_PASSWORD
 min_pool_size = 2
 max_pool_size = 10
