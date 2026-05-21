@@ -9,12 +9,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from ntrip_accuracy_monitor.persistence._executor import (
     Executor,
     acquire_connection,
 )
+
+type TerminationReason = Literal["normal", "signal", "error"]
+"""Причина завершения сеанса для колонки sessions.termination_reason.
+
+  - normal: TaskGroup завершилась штатно (источник кончился, чистый выход),
+  - signal: SIGINT/SIGTERM от оператора,
+  - error:  TaskGroup упала с исключением.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +35,7 @@ class SessionRow:
     description: str
     reference_antenna: dict[str, Any] | None
     config_snapshot: dict[str, Any] | None
+    termination_reason: TerminationReason | None
 
 
 _INSERT_SQL: Final = """\
@@ -37,7 +46,8 @@ RETURNING session_id
 
 _END_SQL: Final = """\
 UPDATE sessions
-SET ended_at = now()
+SET ended_at = now(),
+    termination_reason = $2
 WHERE session_id = $1
   AND ended_at IS NULL
 """
@@ -52,7 +62,7 @@ LIMIT 1
 
 _GET_BY_ID_SQL: Final = """\
 SELECT session_id, started_at, ended_at, description,
-       reference_antenna, config_snapshot
+       reference_antenna, config_snapshot, termination_reason
 FROM sessions
 WHERE session_id = $1
 """
@@ -81,10 +91,19 @@ class SessionRepository:
         assert row is not None
         return row["session_id"]
 
-    async def end(self, session_id: int) -> None:
-        """Завершить сеанс: проставить ``ended_at = now()``."""
+    async def end(
+        self,
+        session_id: int,
+        reason: TerminationReason,
+    ) -> None:
+        """Завершить сеанс: проставить ended_at и причину.
+
+        Если сеанс уже завершён (ended_at IS NOT NULL), UPDATE ничего
+        не делает — повторное завершение тихо игнорируется (идемпотентно
+        для финальных блоков в SessionLifecycle).
+        """
         async with acquire_connection(self._executor) as conn:
-            await conn.execute(_END_SQL, session_id)
+            await conn.execute(_END_SQL, session_id, reason)
 
     async def current(self) -> int | None:
         """Найти самый свежий незавершённый сеанс."""
@@ -105,4 +124,5 @@ class SessionRepository:
             description=row["description"],
             reference_antenna=row["reference_antenna"],
             config_snapshot=row["config_snapshot"],
+            termination_reason=row["termination_reason"],
         )

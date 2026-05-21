@@ -128,6 +128,16 @@ class UpstreamNtripConfig(BaseModel):
     queue_max_size: int = Field(default=1024, ge=16)
     backoff: BackoffConfig = BackoffConfig()
 
+    gga_source_receiver_id: str | None = None
+    """receiver_id из nmea_receivers, чья GGA уходит в кастер.
+    None — GGA-uplink выключен (для не-VRS кастеров без GGA-switching).
+    Указанный receiver должен иметь role 'rover_rtk' или 'rover_spp'
+    (cross-field валидация в AppConfig)."""
+
+    gga_interval_s: float = Field(default=10.0, gt=0.0)
+    """Период отправки GGA вверх по NTRIP-соединению. Передаётся в
+    NtripClient.gga_interval_s. Стандарт VRS-кастеров — 10-30 секунд."""
+
     @model_validator(mode="after")
     def required_when_enabled(self) -> Self:
         if self.enabled and (self.url is None or self.mountpoint is None):
@@ -135,6 +145,20 @@ class UpstreamNtripConfig(BaseModel):
                 "upstream_ntrip.enabled=true requires both 'url' and 'mountpoint'"
             )
         return self
+
+
+class CapturesConfig(BaseModel):
+    """Параметры FileRtcmSink — записи сырого RTCM-потока в файлы.
+
+    При enabled=True для каждого сеанса создаётся файл
+    {directory}/{session_id:06d}_{stream_id}.bin, куда уходят все
+    RTCM-фреймы из RtcmHub без интерпретации. Файл перезаписывается
+    при повторном открытии того же session_id (на практике
+    невозможно — session_id выдаёт БД).
+    """
+
+    enabled: bool = False
+    directory: Path = Path("./captures")
 
 
 class NmeaReceiverConfig(BaseModel):
@@ -171,6 +195,7 @@ class AppConfig(BaseModel):
     upstream_ntrip: UpstreamNtripConfig = UpstreamNtripConfig()
     nmea_receivers: list[NmeaReceiverConfig] = Field(min_length=1)
     reference_antenna: ReferenceAntennaConfig
+    captures: CapturesConfig = CapturesConfig()
 
     @field_validator("nmea_receivers")
     @classmethod
@@ -184,6 +209,36 @@ class AppConfig(BaseModel):
                 f"receiver_id values must be unique; duplicates: {duplicates}"
             )
         return v
+
+    @model_validator(mode="after")
+    def gga_source_receiver_resolvable(self) -> Self:
+        """Если задан upstream_ntrip.gga_source_receiver_id, такой
+        receiver должен существовать в nmea_receivers и иметь роль
+        ровера (отправка GGA от базы в VRS-кастер бессмысленна).
+
+        Не проверяется при upstream_ntrip.enabled=False — позволяет
+        временно выключить uplink без удаления настроек GGA-источника.
+        """
+        if not self.upstream_ntrip.enabled:
+            return self
+        src_id = self.upstream_ntrip.gga_source_receiver_id
+        if src_id is None:
+            return self
+        matching = [r for r in self.nmea_receivers if r.receiver_id == src_id]
+        if not matching:
+            raise ValueError(
+                f"upstream_ntrip.gga_source_receiver_id={src_id!r} not found "
+                f"in nmea_receivers; available: "
+                f"{[r.receiver_id for r in self.nmea_receivers]}"
+            )
+        role = matching[0].role
+        if role not in ("rover_rtk", "rover_spp"):
+            raise ValueError(
+                f"upstream_ntrip.gga_source_receiver_id={src_id!r} has role "
+                f"{role!r}; must be 'rover_rtk' or 'rover_spp' (sending GGA "
+                f"from a base station to a VRS caster is meaningless)"
+            )
+        return self
 
 
 def load_config(path: Path) -> AppConfig:
