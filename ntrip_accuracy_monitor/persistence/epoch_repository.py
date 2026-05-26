@@ -68,6 +68,19 @@ WHERE session_id = $1
 GROUP BY solution_mode
 """
 
+_FETCH_FOR_SESSION_STREAM_SQL: Final = """\
+SELECT stream_id, epoch_time,
+       latitude_deg, longitude_deg, ellipsoidal_height_m,
+       solution_mode,
+       age_of_corrections_s, satellites_used,
+       hdop, pdop,
+       sigma_east_m, sigma_north_m, sigma_up_m
+FROM epochs
+WHERE session_id = $1
+  AND stream_id  = $2
+ORDER BY epoch_time
+"""
+
 
 class EpochRepository:
     """Запись и чтение эпох ровера."""
@@ -123,6 +136,25 @@ class EpochRepository:
                 stream_id,
                 start,
                 end,
+            )
+        return [self._row_to_epoch(row) for row in rows]
+
+    async def fetch_for_session_stream(
+        self,
+        session_id: int,
+        stream_id: str,
+    ) -> list[Epoch]:
+        """Вернуть все эпохи указанного канала в сеансе, отсортированные по времени.
+
+        Используется сервисом расчёта метрик. Контракт сортировки по
+        epoch_time — обязательная часть API: на нём держится расчёт
+        ttff_s в SolutionModeFilter.RTK_FIXED_FLOAT (см. domain/metrics.py).
+        """
+        async with acquire_connection(self._executor) as conn:
+            rows = await conn.fetch(
+                _FETCH_FOR_SESSION_STREAM_SQL,
+                session_id,
+                stream_id,
             )
         return [self._row_to_epoch(row) for row in rows]
 

@@ -59,9 +59,17 @@ receiver_id = "rover_spp"
 host = "192.168.77.139"
 role = "rover_spp"
 
-[reference_antenna]
-# Эталонные координаты общей антенны №2 из пост-обработки RTKLIB
+[reference_antenna]∆
+# Эталонные координаты общей антенны №2 из пост-обработки RTKLIB.
 latitude_deg = 55.7558
 longitude_deg = 37.6173
 ellipsoidal_height_m = 187.5
+
+# Empirical σ NEU эталона из пост-обработки RTKLIB (миллиметры).
+# Опциональные. Используются для оценки значимости отличий метрик
+# между режимами на этапе анализа (НЕ в самих формулах HRMS/VRMS/...).
+# sigma_north_mm = 8.6
+# sigma_east_mm = 16.8
+# sigma_up_mm = 15.2
+
 source = "RTKLIB rtkpost 2025-04-15"

@@ -178,11 +178,22 @@ class NmeaReceiverConfig(BaseModel):
 
 
 class ReferenceAntennaConfig(BaseModel):
-    """Эталонные координаты общей антенны №2 (из RTKLIB пост-обработки)."""
+    """Эталонные координаты общей антенны №2 (из RTKLIB пост-обработки).
+
+    latitude_deg/longitude_deg/ellipsoidal_height_m — центр локальной
+    системы ENU при расчёте метрик точности. Обязательные.
+
+    sigma_*_mm — empirical σ эталона по N/E/U (миллиметры) из пост-обработки RTKLIB.
+    """
 
     latitude_deg: float = Field(ge=-90.0, le=90.0)
     longitude_deg: float = Field(ge=-180.0, le=180.0)
     ellipsoidal_height_m: float = Field(ge=-1000.0, le=20000.0)
+
+    sigma_north_mm: float | None = Field(default=None, gt=0.0)
+    sigma_east_mm: float | None = Field(default=None, gt=0.0)
+    sigma_up_mm: float | None = Field(default=None, gt=0.0)
+
     source: str = "RTKLIB rtkpost"
 
 
