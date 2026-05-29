@@ -42,6 +42,13 @@ dev = [
   "ruff>=0.9",
 ]
 
+gui = [
+  "streamlit>=1.40,<2.0",
+  "streamlit-autorefresh>=1.0,<2.0",
+  "plotly>=5.20,<7.0",
+  "pandas>=2.2,<3.0",
+]
+
 [project.scripts]
 ntrip-accuracy-monitor = "ntrip_accuracy_monitor.cli.__main__:main"
 
