@@ -73,3 +73,13 @@ ellipsoidal_height_m = 187.5
 # sigma_up_mm = 15.2
 
 source = "RTKLIB rtkpost 2025-04-15"
+
+[gui]
+auto_refresh_ms = 2000
+live_window_seconds = 300
+recent_epochs_limit = 50
+pool_min_size = 1
+pool_max_size = 3
+
+[metrics]
+refresh_interval_s = 60.0
