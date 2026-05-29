@@ -42,6 +42,43 @@ _EFT_RS3_DEFAULT_NMEA_PORT: int = 9001
 """Штатный TCP-порт NMEA на EFT RS3."""
 
 
+class MetricsConfig(BaseModel):
+    """Параметры периодического пересчёта метрик во время сеанса (B3).
+
+    Метрики (HRMS/VRMS/CEP50/R95 + зависимость от возраста коррекций)
+    пересчитываются и upsert'ятся в session_metrics / metrics_by_age
+    каждые refresh_interval_s, пока сеанс активен, плюс один финальный
+    пересчёт при штатной остановке. Это позволяет странице «Отчёт по
+    сеансу» показывать метрики растущего сеанса, оставаясь view-only.
+
+    refresh_interval_s держим грубым: каждый тик — полный пересчёт O(N)
+    по всем эпохам канала (CEP50/R95 — перцентили, выбраковка
+    двухпроходная, инкрементально не считаются), N растёт по ходу сеанса.
+    """
+
+    refresh_interval_s: float = Field(default=60.0, gt=0.0)
+
+
+class GuiConfig(BaseModel):
+    """Конфиг Streamlit-GUI. Читается из секции [gui] config.toml.
+    """
+
+    auto_refresh_ms: int = Field(default=2000, ge=100)
+    live_window_seconds: int = Field(default=300, ge=1)
+    recent_epochs_limit: int = Field(default=50, ge=1)
+    pool_min_size: int = Field(default=1, ge=1)
+    pool_max_size: int = Field(default=3, ge=1)
+
+    @model_validator(mode="after")
+    def pool_sizes_consistent(self) -> Self:
+        if self.pool_max_size < self.pool_min_size:
+            raise ValueError(
+                f"pool_max_size ({self.pool_max_size}) must be >= "
+                f"pool_min_size ({self.pool_min_size})"
+            )
+        return self
+
+
 class PostgresConfig(BaseModel):
     """Параметры подключения к PostgreSQL и размер пула asyncpg."""
 
@@ -207,6 +244,8 @@ class AppConfig(BaseModel):
     nmea_receivers: list[NmeaReceiverConfig] = Field(min_length=1)
     reference_antenna: ReferenceAntennaConfig
     captures: CapturesConfig = CapturesConfig()
+    metrics: MetricsConfig = MetricsConfig()
+    gui: GuiConfig = GuiConfig()
 
     @field_validator("nmea_receivers")
     @classmethod

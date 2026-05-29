@@ -70,6 +70,17 @@ from ntrip_accuracy_monitor.protocols.ntrip._rover_gga import RoverGgaProvider
 from ntrip_accuracy_monitor.protocols.ntrip.transport import NtripClient
 from ntrip_accuracy_monitor.protocols.rtcm.adapter import RtcmAdapter
 
+from ntrip_accuracy_monitor.application.service.metrics_service import (
+    MetricsService,
+)
+from ntrip_accuracy_monitor.persistence.age_bin_metrics_repository import (
+    AgeBinMetricsRepository,
+)
+from ntrip_accuracy_monitor.persistence.metrics_repository import (
+    MetricsRepository,
+)
+from ntrip_accuracy_monitor.protocols.ntrip.caster import NtripCasterServer
+
 logger: Final = logging.getLogger(__name__)
 
 # ---- константы NTRIP ----
@@ -98,8 +109,6 @@ class SessionLifecycle:
         self._epoch_repo: Final = EpochRepository(pool)
         self._rtcm_repo: Final = RtcmRepository(pool)
 
-        self._hub: Final = RtcmHub()
-
         # Состояние сеанса.
         self._session_id: int | None = None
         self._run_called: bool = False
@@ -109,6 +118,19 @@ class SessionLifecycle:
         self._rtcm_audit: RtcmAuditWriter | None = None
         self._file_sink: FileRtcmSink | None = None
         self._gga_provider: RoverGgaProvider | None = None
+        self._caster: NtripCasterServer | None = None
+
+        self._hub: Final = RtcmHub(
+            subscriber_queue_size=config.local_caster.subscriber_queue_size,
+        )
+
+        self._metrics_service: Final = MetricsService(
+            self._session_repo,
+            self._epoch_repo,
+            executor=pool,
+            metrics_repository=MetricsRepository(pool),
+            age_bin_metrics_repository=AgeBinMetricsRepository(pool),
+        )
 
     # ---------------------------- public API -----------------------------
     @property
@@ -188,6 +210,8 @@ class SessionLifecycle:
         # вверх — будет пойман except* BaseException в run().
         self._file_sink = await self._maybe_open_file_sink()
 
+        self._caster = await self._maybe_start_caster()
+
         # 3. TaskGroup. Тут уже не делаем «отложенной» инициализации:
         # все компоненты готовы.
         async with asyncio.TaskGroup() as tg:
@@ -228,6 +252,12 @@ class SessionLifecycle:
                 tg.create_task(
                     writer.run_background_flusher(),
                     name=f"epoch-writer-{cfg.receiver_id}",
+                )
+
+            if self._rover_components:
+                tg.create_task(
+                    self._run_metrics_refresher(),
+                    name="metrics-refresher",
                 )
 
     # ---------------------------- task bodies ----------------------------
@@ -292,6 +322,87 @@ class SessionLifecycle:
                 if gga_provider is not None:
                     await gga_provider.consume(record)
 
+    async def _maybe_start_caster(self) -> NtripCasterServer | None:
+        """Поднять локальный NTRIP-кастер поверх RtcmHub (раздача роверам).
+
+        Возвращает None при upstream_ntrip.enabled=False: без апстрима в
+        Hub не поступает RTCM — раздавать нечего, а слушающий порт с
+        пустым потоком только путает ровер.
+        """
+        if not self._config.upstream_ntrip.enabled:
+            logger.info(
+                "Локальный кастер не поднят: upstream_ntrip.enabled=false "
+                "(нет источника RTCM для раздачи)",
+            )
+            return None
+        cfg = self._config.local_caster
+        caster = NtripCasterServer(
+            host=cfg.host,
+            port=cfg.port,
+            mountpoint=cfg.mountpoint,
+            hub=self._hub,
+            username=cfg.username,
+            password=(
+                cfg.password.get_secret_value()
+                if cfg.password is not None else None
+            ),
+            sourcetable_country=cfg.sourcetable_country,
+            handshake_timeout_s=cfg.handshake_timeout_s,
+        )
+        try:
+            await caster.start()
+        except BaseException:
+            await caster.aclose()
+            raise
+        logger.info(
+            "Локальный кастер поднят: %s:%d/%s (auth=%s) — ровер подключай сюда",
+            cfg.host, cfg.port, cfg.mountpoint, "да" if cfg.username else "нет",
+        )
+        return caster
+
+    async def _run_metrics_refresher(self) -> None:
+        """Периодический пересчёт метрик сеанса (B3).
+
+        Каждые ``metrics.refresh_interval_s`` пересчитывает и upsert'ит
+        session_metrics / metrics_by_age для каждого ровера. Ошибки
+        пересчёта логируются и НЕ пробрасываются — иначе сбой метрик
+        обрушил бы TaskGroup и остановил ingest. CancelledError проходит
+        насквозь (через sleep) для чистой остановки.
+        """
+        interval = self._config.metrics.refresh_interval_s
+        logger.info("Рефрешер метрик запущен: интервал %.0f с", interval)
+        while True:
+            await asyncio.sleep(interval)
+            await self._recompute_metrics(context="периодический")
+
+    async def _recompute_metrics(self, *, context: str) -> None:
+        """Пересчитать и записать метрики по всем роверам (persist=True).
+
+        Каждый канал изолирован: исключение на одном не мешает другим и
+        не выходит наружу (кроме CancelledError). Вызывается из рефрешера
+        и из _shutdown (финальный пересчёт). compute_session_metrics —
+        первым (создаёт строку session_metrics), затем age-bins.
+        """
+        sid = self._session_id
+        if sid is None:
+            return
+        for cfg, _aggregator, _writer in self._rover_components:
+            stream_id = cfg.receiver_id
+            try:
+                await self._metrics_service.compute_session_metrics(
+                    sid, stream_id, persist=True,
+                )
+                await self._metrics_service.compute_session_age_bin_metrics(
+                    sid, stream_id, persist=True,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Пересчёт метрик (%s) для канала %s упал — пропускаю",
+                    context, stream_id,
+                )
+
     # ----------------------------- shutdown ------------------------------
     async def _shutdown(self, reason: TerminationReason) -> None:
         """Финальный порядок остановки (см. план в обсуждении).
@@ -329,6 +440,17 @@ class SessionLifecycle:
         self._file_sink = None
         if sink is not None:
             await _safe_call(sink.aclose(), what="file_sink.aclose")
+
+        caster = self._caster
+        self._caster = None
+        if caster is not None:
+            await _safe_call(caster.aclose(), what="caster.aclose")
+
+        if reason in ("normal", "signal") and self._rover_components:
+            await _safe_call(
+                asyncio.shield(self._recompute_metrics(context="финальный")),
+                what="metrics.final",
+            )
 
         # 5. ОБНУЛЯЕМ session_id. После этой точки писать в БД через
         # session_id_provider бессмысленно — но writer'ы уже остановлены.

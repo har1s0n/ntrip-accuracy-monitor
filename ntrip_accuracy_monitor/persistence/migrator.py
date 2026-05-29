@@ -104,6 +104,35 @@ async def apply_migrations(
     return applied_now
 
 
+async def pending_migrations(
+    pool: asyncpg.Pool,
+    migrations_dir: Path | None = None,
+) -> list[str]:
+    """Версии миграций на диске, ещё не применённые к базе.
+
+    Базу не меняет (кроме идемпотентного CREATE TABLE IF NOT EXISTS
+    служебной таблицы — нужен, чтобы прочитать применённые версии).
+    Пустой список — схема актуальна. Используется в preflight команды
+    ``run``.
+
+    Raises:
+        FileNotFoundError, ValueError: как в apply_migrations.
+        RuntimeError: осиротевшая версия в schema_migrations.
+        asyncpg.PostgresError: ошибка БД.
+    """
+    if migrations_dir is None:
+        migrations_dir = _MIGRATIONS_DIR_DEFAULT
+    if not migrations_dir.is_dir():
+        raise FileNotFoundError(f"Каталог миграций не найден: {migrations_dir}")
+
+    files_on_disk = _discover_migration_files(migrations_dir)
+    async with pool.acquire() as conn:
+        await conn.execute(_CREATE_META_TABLE_SQL)
+        applied = await _fetch_applied_versions(conn)
+    _check_no_orphan_versions(applied, files_on_disk)
+    return [version for version, _ in files_on_disk if version not in applied]
+
+
 def _discover_migration_files(migrations_dir: Path) -> list[tuple[str, Path]]:
     """Список миграционных файлов каталога, отсортированный по номеру."""
     found: list[tuple[str, Path]] = []
