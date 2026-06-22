@@ -5,10 +5,10 @@
 -- Запуск (через обёртку init_db.sh для удобства, см. рядом):
 --
 --   Linux/macOS:
---     sudo -u postgres psql -v pg_password="$PG_PASSWORD" -f scripts/init_db.sql
+--     sudo -u postgres psql -v pg_password="$PG_PASSWORD" < scripts/init_db.sql
 --
 --   Windows (PowerShell):
---     psql -U postgres -v pg_password="$env:PG_PASSWORD" -f scripts\init_db.sql
+--     psql -U postgres -v pg_password="$env:PG_PASSWORD" < scripts\init_db.sql
 --
 -- Идемпотентен. При повторном запуске пароль роли синхронизируется со
 -- значением pg_password — это намеренное поведение для bootstrap.
@@ -19,13 +19,17 @@
 
 \if :{?pg_password}
 \else
-\warn 'ERROR: pg_password не задан. Запустите: psql -v pg_password=... -f init_db.sql'
+\warn 'ERROR: pg_password не задан. Запустите: psql -v pg_password=... < init_db.sql'
 \quit 1
 \endif
 
+-- Передаем переменную psql в локальный параметр сессии PostgreSQL.
+-- В этом контексте psql корректно подставит значение вместо :'pg_password'.
+SET ntrip.tmp_password = :'pg_password';
+
 DO $$
 BEGIN
-    IF :'pg_password' = '' THEN
+    IF current_setting('ntrip.tmp_password') = '' THEN
         RAISE EXCEPTION 'pg_password is empty; provide a non-empty value via psql -v';
     END IF;
 END
@@ -36,16 +40,19 @@ $$;
 -- ---------------------------------------------------------------------------
 
 DO $$
+DECLARE
+    -- Считываем пароль из параметра сессии
+    v_password text := current_setting('ntrip.tmp_password');
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ntrip') THEN
         EXECUTE format(
             'CREATE ROLE ntrip WITH LOGIN ENCRYPTED PASSWORD %L',
-            :'pg_password'
+            v_password
         );
     ELSE
         EXECUTE format(
             'ALTER ROLE ntrip WITH LOGIN ENCRYPTED PASSWORD %L',
-            :'pg_password'
+            v_password
         );
     END IF;
 END
