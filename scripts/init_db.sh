@@ -6,7 +6,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# Исправлено: поднимаемся на один уровень вверх к корню проекта
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${PROJECT_ROOT}/.env"
 SQL_FILE="${SCRIPT_DIR}/init_db.sql"
 
@@ -29,6 +30,15 @@ if [[ -z "${PG_PASSWORD:-}" ]]; then
     exit 1
 fi
 
-echo "Запуск init_db.sql..."
-sudo -u postgres psql -v ON_ERROR_STOP=1 -v pg_password="$PG_PASSWORD" -f "$SQL_FILE"
+# Определяем команду для запуска psql
+if id -u postgres >/dev/null 2>&1; then
+    # Linux-окружения, где есть системный пользователь postgres
+    PSQL_CMD="sudo -u postgres psql"
+else
+    # macOS или окружения, где psql работает от текущего пользователя
+    PSQL_CMD="psql postgres"
+fi
+
+echo "Запуск init_db.sql через: ${PSQL_CMD}"
+$PSQL_CMD -v ON_ERROR_STOP=1 -v pg_password="$PG_PASSWORD" -f "$SQL_FILE"
 echo "Готово. Теперь можно запускать миграции."
