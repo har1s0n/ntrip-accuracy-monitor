@@ -15,10 +15,12 @@ import logging
 from contextlib import suppress
 from types import TracebackType
 from typing import Final, Self
+from collections.abc import Callable
 
 from ._hub import RtcmHub
 from ._server_handshake import HandshakeError, NtripRequest, read_request
 from ._sourcetable import StrRecord, build_sourcetable
+from .injection import InjectionPlan, run_injection
 
 logger: Final = logging.getLogger(__name__)
 
@@ -39,6 +41,8 @@ class NtripCasterServer:
         password: str | None = None,
         sourcetable_country: str = "POL",
         handshake_timeout_s: float = 10.0,
+        injection: InjectionPlan | None = None,
+        now_session: Callable[[], float] | None = None,
     ) -> None:
         self._host: Final = host
         self._port: Final = port
@@ -47,6 +51,10 @@ class NtripCasterServer:
         self._username: Final = username
         self._password: Final = password
         self._handshake_timeout_s: Final = handshake_timeout_s
+        self._injection: Final = (
+            injection if injection is not None else InjectionPlan()
+        )
+        self._now_session: Final = now_session
         self._str_record: Final = StrRecord(
             mountpoint=mountpoint,
             country=sourcetable_country,
@@ -239,18 +247,18 @@ class NtripCasterServer:
 
         drain_task = asyncio.create_task(self._drain_client_input(reader))
 
+        async def send(chunk: bytes) -> None:
+            writer.write(chunk)
+            await writer.drain()
+
         try:
             async with self._hub.subscribe() as queue:
-                while True:
-                    frame = await queue.get()
-                    if frame is None:  # source shutdown sentinel
-                        return
-                    writer.write(frame)
-                    try:
-                        await writer.drain()
-                    except (ConnectionResetError, BrokenPipeError):
-                        logger.info("Client %s disconnected during stream", peer)
-                        return
+                await run_injection(
+                    queue, send, self._injection,
+                    now_session=self._now_session,
+                )
+        except (ConnectionResetError, BrokenPipeError):
+            logger.info("Client %s disconnected during stream", peer)
         finally:
             drain_task.cancel()
             with suppress(asyncio.CancelledError, Exception):

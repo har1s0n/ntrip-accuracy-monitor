@@ -33,6 +33,7 @@ from pydantic import (
 )
 
 from ntrip_accuracy_monitor.protocols.backoff import BackoffPolicy
+from ntrip_accuracy_monitor.protocols.ntrip.injection import InjectionPlan
 
 _PG_PASSWORD_ENV: str = "PG_PASSWORD"
 _UPSTREAM_NTRIP_PASSWORD_ENV: str = "UPSTREAM_NTRIP_PASSWORD"
@@ -40,6 +41,46 @@ _LOCAL_CASTER_PASSWORD_ENV: str = "LOCAL_CASTER_PASSWORD"
 
 _EFT_RS3_DEFAULT_NMEA_PORT: int = 9001
 """Штатный TCP-порт NMEA на EFT RS3."""
+
+
+class DelaySegment(BaseModel):
+    """Сегмент серии задержек: держать delay_s в течение duration_s."""
+
+    duration_s: float = Field(gt=0.0)
+    delay_s: float = Field(ge=0.0)
+
+
+class CorrectionInjectionConfig(BaseModel):
+    """Инжектирование возраста поправок на плече ровера (Part B).
+
+    Как наш кастер искажает поток поправок для ровера-под-тестом:
+      passthrough — без искажений (по умолчанию);
+      delay       — непрерывный сдвиг возраста по серии сегментов schedule;
+                    при loop=True серия повторяется до конца сеанса;
+      dropout     — периодическое прерывание потока (on/off).
+    Применяется ко ВСЕМ клиентам кастера: в сеансе подключён один ровер.
+    """
+
+    mode: Literal["passthrough", "delay", "dropout"] = "passthrough"
+    schedule: list[DelaySegment] = Field(default_factory=list)
+    loop: bool = False
+    dropout_on_s: float = Field(default=60.0, gt=0.0)
+    dropout_off_s: float = Field(default=10.0, gt=0.0)
+
+    @model_validator(mode="after")
+    def _mode_requires_schedule(self) -> Self:
+        if self.mode == "delay" and not self.schedule:
+            raise ValueError("mode='delay' требует непустого schedule")
+        return self
+
+    def to_plan(self) -> InjectionPlan:
+        return InjectionPlan(
+            mode=self.mode,
+            schedule=tuple((s.duration_s, s.delay_s) for s in self.schedule),
+            loop=self.loop,
+            dropout_on_s=self.dropout_on_s,
+            dropout_off_s=self.dropout_off_s,
+        )
 
 
 class MetricsConfig(BaseModel):
@@ -144,6 +185,9 @@ class LocalCasterConfig(BaseModel):
     sourcetable_country: str = Field(default="POL", min_length=3, max_length=3)
     subscriber_queue_size: int = Field(default=256, ge=1)
     handshake_timeout_s: float = Field(default=10.0, gt=0)
+    injection: CorrectionInjectionConfig = Field(
+        default_factory=CorrectionInjectionConfig
+    )
 
 
 class UpstreamNtripConfig(BaseModel):

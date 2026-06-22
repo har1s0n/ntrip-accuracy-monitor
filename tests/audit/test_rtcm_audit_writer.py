@@ -17,8 +17,19 @@ from ntrip_accuracy_monitor.protocols.rtcm.adapter import (
     RtcmMessage,
     RtcmParseError,
 )
+from ntrip_accuracy_monitor.protocols.ntrip._framer import crc24q
 
 _SESSION_ID: Final[int] = 42
+
+
+def _make_frame(msg_type: int = 1004, body: bytes = b"\x00" * 20) -> bytes:
+    """Минимальный CRC-валидный RTCM3-кадр."""
+    payload = bytes([(msg_type >> 4) & 0xFF, (msg_type & 0x0F) << 4]) + body
+    length = len(payload)
+    head = bytes([0xD3, (length >> 8) & 0x03, length & 0xFF])
+    frame = head + payload
+    crc = crc24q(frame)
+    return frame + bytes([(crc >> 16) & 0xFF, (crc >> 8) & 0xFF, crc & 0xFF])
 
 
 def _make_rtcm_message(
@@ -99,7 +110,7 @@ async def test_consume_hub_parses_and_buffers_below_threshold(
     writer = _make_writer(adapter, repository, max_buffer_size=10)
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
     for _ in range(3):
-        await q.put(b"\xd3\x00\x01frame")
+        await q.put(_make_frame())
     await q.put(None)  # завершение
 
     await writer.consume_hub(q)
@@ -118,7 +129,7 @@ async def test_consume_hub_full_buffer_triggers_intermediate_flush(
     writer = _make_writer(adapter, repository, max_buffer_size=2)
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
     for _ in range(5):
-        await q.put(b"\xd3\x00\x01frame")
+        await q.put(_make_frame())
     await q.put(None)
 
     await writer.consume_hub(q)
@@ -134,8 +145,8 @@ async def test_consume_hub_sentinel_triggers_final_flush(
 ) -> None:
     writer = _make_writer(adapter, repository, max_buffer_size=100)
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
-    await q.put(b"frame-1")
-    await q.put(b"frame-2")
+    await q.put(_make_frame())
+    await q.put(_make_frame())
     await q.put(None)
 
     await writer.consume_hub(q)
@@ -156,7 +167,7 @@ async def test_consume_hub_skips_parse_errors_and_continues(
     writer = _make_writer(adapter, repository)
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
     for _ in range(3):
-        await q.put(b"\xd3\x00\x01frame")
+        await q.put(_make_frame())
     await q.put(None)
 
     await writer.consume_hub(q)
@@ -175,8 +186,8 @@ async def test_flush_without_session_id_drops_buffer(
 ) -> None:
     writer = _make_writer(adapter, repository, session_id=None)
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
-    await q.put(b"frame-1")
-    await q.put(b"frame-2")
+    await q.put(_make_frame())
+    await q.put(_make_frame())
     await q.put(None)
 
     await writer.consume_hub(q)
@@ -195,7 +206,7 @@ async def test_flush_transient_error_retries_then_succeeds(
     )
     writer = _make_writer(adapter, repository)
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
-    await q.put(b"frame")
+    await q.put(_make_frame())
     await q.put(None)
 
     await writer.consume_hub(q)
@@ -219,8 +230,8 @@ async def test_flush_persistent_db_error_drops_batch_after_timeout(
         retry_total_timeout_s=0.05,
     )
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
-    await q.put(b"frame-1")
-    await q.put(b"frame-2")
+    await q.put(_make_frame())
+    await q.put(_make_frame())
     await q.put(None)
 
     await writer.consume_hub(q)
@@ -241,14 +252,14 @@ async def test_background_flusher_periodically_flushes_buffer(
 
     async def producer() -> None:
         q: asyncio.Queue[bytes | None] = asyncio.Queue()
-        await q.put(b"frame-1")
+        await q.put(_make_frame())
         # consume_hub съест один фрейм и встанет ждать на queue.get()
         await writer.consume_hub(q)
 
     # consume_hub блокирует — кладём один фрейм, потом ждём фоновый flush,
     # потом отправляем sentinel.
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
-    await q.put(b"frame-1")
+    await q.put(_make_frame())
 
     consume_task = asyncio.create_task(writer.consume_hub(q))
     flusher_task = asyncio.create_task(writer.run_background_flusher())
@@ -288,8 +299,8 @@ async def test_cancelled_consume_hub_still_flushes_in_finally(
 ) -> None:
     writer = _make_writer(adapter, repository, max_buffer_size=100)
     q: asyncio.Queue[bytes | None] = asyncio.Queue()
-    await q.put(b"frame-1")
-    await q.put(b"frame-2")
+    await q.put(_make_frame())
+    await q.put(_make_frame())
     # sentinel НЕ кладём — даём task встать на queue.get(), потом отменяем.
 
     task = asyncio.create_task(writer.consume_hub(q))

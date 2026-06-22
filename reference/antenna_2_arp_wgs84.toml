@@ -63,3 +63,7 @@ empirical_to_formal_ratio_u = 5.6
 deviation_from_methodology  = "fix_ratio 0.765 vs 0.80 (§4.1); обосновано multipath-потолком"
 cross_check_q1_vs_q2_mm     = "Δlat=-12, Δlon=-16, Δh=-6 (систематика multipath bias)"
 formal_se_xyz_mm            = "0.07 / 0.07 / 0.06 — НЕ использовать как σ; см. empirical"
+
+
+lat = 55.984304272°   lon = 37.213667751°   h = 236.7007 м (эллипс., WGS-84)
+σ_эт (E/N/U) ≈ 4 / 1,5 / 3 мм   (межоконная повторяемость, P≈0,68)

@@ -11,9 +11,8 @@ Reference: RTCM 10403.x §4 (frame structure), CRC-24Q polynomial
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator, Callable
-from typing import Final
+from typing import Final, Protocol
 
 _PREAMBLE: Final[int] = 0xD3
 _HEADER_LEN: Final[int] = 3
@@ -21,8 +20,6 @@ _CRC_LEN: Final[int] = 3
 _MAX_PAYLOAD: Final[int] = 1023  # 10-bit length field
 _MAX_FRAME: Final[int] = _HEADER_LEN + _MAX_PAYLOAD + _CRC_LEN  # 1029
 _READ_CHUNK: Final[int] = 4096
-
-from typing import Protocol
 
 
 class AsyncByteReader(Protocol):
@@ -61,7 +58,7 @@ def extract_msg_type(payload: bytes | bytearray | memoryview) -> int:
 
 
 async def stream_rtcm_frames(
-    reader: asyncio.StreamReader,
+    reader: AsyncByteReader,
     *,
     initial_buffer: bytes = b"",
     on_resync: Callable[[bytes], None] | None = None,

@@ -83,3 +83,18 @@ pool_max_size = 3
 
 [metrics]
 refresh_interval_s = 60.0
+
+[local_caster.injection]
+mode = "passthrough"
+
+#[local_caster.injection]
+#mode = "delay"
+#loop = true                                  # серия повторяется до конца сеанса
+#schedule = [
+#  { duration_s = 600, delay_s = 0.0 },
+#  { duration_s = 600, delay_s = 2.0 },
+#  { duration_s = 600, delay_s = 5.0 },
+#  { duration_s = 600, delay_s = 10.0 },
+#  { duration_s = 600, delay_s = 20.0 },
+#  { duration_s = 600, delay_s = 30.0 },
+#]

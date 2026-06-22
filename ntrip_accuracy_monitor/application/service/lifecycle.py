@@ -35,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import time
 from typing import Any, Final
 
 import asyncpg
@@ -111,6 +112,7 @@ class SessionLifecycle:
 
         # Состояние сеанса.
         self._session_id: int | None = None
+        self._session_start: float = 0.0
         self._run_called: bool = False
 
         # Компоненты, инициализируются в _run_tasks.
@@ -158,6 +160,7 @@ class SessionLifecycle:
 
         reason: TerminationReason = "normal"
         try:
+            self._session_start = time.monotonic()
             self._session_id = await self._session_repo.start(
                 description=self._build_description(),
                 reference_antenna=self._build_reference_antenna(),
@@ -273,7 +276,7 @@ class SessionLifecycle:
         self,
         gga_provider: RoverGgaProvider | None,
     ) -> None:
-        """Перекладывает RTCM-фреймы из NtripClient в RtcmHub."""
+        """Перекладывает сырой поток RTCM из NtripClient в RtcmHub."""
         cfg = self._config.upstream_ntrip
         assert cfg.enabled, "_run_ntrip_bridge при upstream_ntrip.enabled=False"
         assert cfg.url is not None and cfg.mountpoint is not None
@@ -297,9 +300,10 @@ class SessionLifecycle:
                 gga_provider.provide if gga_provider is not None else None
             ),
             gga_interval_s=cfg.gga_interval_s,
+            raw=True,  # ретранслируем весь поток, включая RTCM 2.x (type 41)
         ) as client:
-            async for frame in client:
-                self._hub.feed(frame)
+            async for chunk in client:
+                self._hub.feed(chunk)
 
     async def _run_nmea_bridge(
         self,
@@ -348,6 +352,8 @@ class SessionLifecycle:
             ),
             sourcetable_country=cfg.sourcetable_country,
             handshake_timeout_s=cfg.handshake_timeout_s,
+            injection=cfg.injection.to_plan(),
+            now_session=lambda: time.monotonic() - self._session_start,
         )
         try:
             await caster.start()

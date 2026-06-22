@@ -51,6 +51,7 @@ _MAX_PORT_NUMBER: Final[int] = 65535
 _HANDSHAKE_READ_CHUNK: Final[int] = 4096
 _HANDSHAKE_BUFFER_LIMIT: Final[int] = 64 * 1024  # 64 KiB cap for headers
 _WATCHDOG_TICK_S: Final[float] = 0.25
+_RAW_READ_CHUNK: Final[int] = 4096  # размер чтения тела в режиме raw
 
 type GGAProvider = Callable[[], Awaitable[bytes | None]]
 
@@ -99,6 +100,7 @@ class NtripClient:
         user_agent: str = _DEFAULT_USER_AGENT,
         gga_provider: GGAProvider | None = None,
         gga_interval_s: float = 10.0,
+        raw: bool = False,
     ) -> None:
         if not stream_id.strip():
             raise ValueError("stream_id must be non-empty")
@@ -156,6 +158,10 @@ class NtripClient:
         self._gga_provider = gga_provider
         self._gga_interval_s = gga_interval_s
         self._gga_sent: int = 0
+
+        # Сырая ретрансляция: тело отдаётся кусками без выделения RTCM3-кадров.
+        # Включает поток с RTCM 2.x (фирменный type 41 RS3)
+        self._raw = raw
 
     # ----------------------------- properties -----------------------------
     @property
@@ -536,7 +542,11 @@ class NtripClient:
         leftover: bytes,
         headers: dict[str, str],
     ) -> NtripPermanentError | None:
-        """Run framer + watchdog. Returns None on any transient end."""
+        """Прогон framer'а (или сырой ретрансляции) + сторожевой таймер.
+
+        Возвращает None при любом транзиентном завершении (EOF тела или
+        срабатывание сторожевого таймера) — наверх это сигнал к переподключению.
+        """
         body_reader: AsyncByteReader
         framer_initial: bytes
         te = headers.get("transfer-encoding", "").lower()
@@ -553,7 +563,7 @@ class NtripClient:
             if discarded:
                 self._crc_failures += 1
 
-        async def consume() -> None:
+        async def consume_framed() -> None:
             async for frame in stream_rtcm_frames(
                 body_reader, initial_buffer=framer_initial, on_resync=on_resync,
             ):
@@ -566,16 +576,37 @@ class NtripClient:
                 except asyncio.QueueFull:
                     self._dropped_full += 1
 
+        async def consume_raw() -> None:
+            # Сырая ретрансляция: relay-путь без выделения RTCM3-кадров.
+            def emit(chunk: bytes) -> None:
+                self._frames_received += 1
+                self._last_frame_at = time.monotonic()
+                if self._connect_attempt != 0:
+                    self._connect_attempt = 0
+                try:
+                    self._aqueue.put_nowait(chunk)
+                except asyncio.QueueFull:
+                    self._dropped_full += 1
+
+            if framer_initial:
+                emit(framer_initial)
+            while True:
+                chunk = await body_reader.read(_RAW_READ_CHUNK)
+                if not chunk:
+                    return
+                emit(chunk)
+
         async def watchdog() -> None:
             while True:
                 await asyncio.sleep(_WATCHDOG_TICK_S)
                 if time.monotonic() - self._last_frame_at > self._stall_timeout_s:
                     self._stall_timeouts += 1
                     self._logger.warning(
-                        "ntrip stall: no frame for %.1fs", self._stall_timeout_s
+                        "ntrip stall: no data for %.1fs", self._stall_timeout_s
                     )
                     return
 
+        consume = consume_raw if self._raw else consume_framed
         consume_task = asyncio.create_task(consume(), name="ntrip-consume")
         watchdog_task = asyncio.create_task(watchdog(), name="ntrip-watchdog")
         try:

@@ -30,6 +30,7 @@ from ntrip_accuracy_monitor.persistence.rtcm_repository import (
     RtcmMessageRecord,
     RtcmRepository,
 )
+from ntrip_accuracy_monitor.protocols.ntrip._framer import stream_rtcm_frames
 from ntrip_accuracy_monitor.protocols.rtcm.adapter import (
     RtcmAdapter,
     RtcmParseError,
@@ -43,6 +44,35 @@ _TRANSIENT_DB_ERRORS: Final[tuple[type[BaseException], ...]] = (
     asyncpg.exceptions.InterfaceError,
     OSError,
 )
+
+
+class _QueueByteReader:
+    """AsyncByteReader поверх очереди подписки RtcmHub.
+
+    RtcmHub кладёт в очередь куски сырых байт и sentinel-None в конце.
+    Реализует протокол _framer.AsyncByteReader (метод read), чтобы подать
+    поток в stream_rtcm_frames; sentinel-None → b"" (EOF для framer'а).
+    """
+
+    def __init__(self, queue: asyncio.Queue[bytes | None]) -> None:
+        self._queue = queue
+        self._buf = bytearray()
+        self._eof = False
+
+    async def read(self, n: int = -1) -> bytes:
+        while not self._buf and not self._eof:
+            item = await self._queue.get()
+            if item is None:
+                self._eof = True
+            elif item:
+                self._buf.extend(item)
+        if n < 0 or n >= len(self._buf):
+            out = bytes(self._buf)
+            self._buf.clear()
+            return out
+        out = bytes(self._buf[:n])
+        del self._buf[:n]
+        return out
 
 
 class RtcmAuditWriter:
@@ -103,6 +133,7 @@ class RtcmAuditWriter:
         self._dropped_no_session = 0
         self._dropped_db_unavailable = 0
         self._written_total = 0
+        self._resync_bytes = 0
 
     # ----------------------------- properties -----------------------------
     @property
@@ -133,33 +164,45 @@ class RtcmAuditWriter:
     def written_total(self) -> int:
         return self._written_total
 
+    @property
+    def resync_bytes(self) -> int:
+        return self._resync_bytes
+
     # ----------------------------- public API -----------------------------
     async def consume_hub(self, queue: asyncio.Queue[bytes | None]) -> None:
-        """Главный цикл: тянет байты из очереди подписки RtcmHub.
+        """Главный цикл: выделяет RTCM3-кадры из сырого потока RtcmHub и пишет метаданные.
+
+        RtcmHub отдаёт сырые байты (relay-поток, см. NtripClient(raw=True)),
+        поэтому кадры выделяются здесь тем же stream_rtcm_frames, что и в
+        транспорте. Не-RTCM3 байты (RTCM 2.x 6-of-8, мусор между кадрами,
+        кадры с битым CRC) уходят в on_resync и в аудит не попадают —
+        учитываются счётчиком resync_bytes.
 
         Завершается на:
-          - sentinel-None из очереди (источник прекратил выдачу),
+          - sentinel-None из очереди → для _QueueByteReader это EOF, и
+            итератор кадров останавливается;
           - asyncio.CancelledError (остановка снаружи).
 
-        В обоих случаях в finally вызывается финальный flush — буфер
-        дописывается. При cancellation финальный flush может быть прерван
-        повторной отменой; это известное ограничение, документировано
-        выше в module docstring.
+        В обоих случаях в finally вызывается финальный flush. При cancellation
+        финальный flush может быть прерван повторной отменой; это известное
+        ограничение, документировано в module docstring.
         """
+        reader = _QueueByteReader(queue)
+
+        def on_resync(discarded: bytes) -> None:
+            if discarded:
+                self._resync_bytes += len(discarded)
+
         try:
-            while True:
-                item = await queue.get()
-                if item is None:
-                    logger.info("rtcm-audit: end-of-stream sentinel received")
-                    return
+            async for frame in stream_rtcm_frames(reader, on_resync=on_resync):
                 self._frames_received += 1
                 try:
-                    msg = self._adapter.parse(item)
+                    msg = self._adapter.parse(frame)
                 except RtcmParseError as exc:
                     self._parse_failures += 1
                     logger.warning(
                         "rtcm-audit: parse failed for %d-byte frame: %s",
-                        len(item), exc,
+                        len(frame), exc,
                     )
                     continue
                 self._frames_parsed += 1
