@@ -40,5 +40,5 @@ else
 fi
 
 echo "Запуск init_db.sql через: ${PSQL_CMD}"
-$PSQL_CMD -v ON_ERROR_STOP=1 -v pg_password="$PG_PASSWORD" -f "$SQL_FILE"
+$PSQL_CMD -v ON_ERROR_STOP=1 -v pg_password="$PG_PASSWORD" < "$SQL_FILE"
 echo "Готово. Теперь можно запускать миграции."
