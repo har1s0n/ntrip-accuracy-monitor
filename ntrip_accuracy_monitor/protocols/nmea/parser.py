@@ -111,17 +111,29 @@ def nmea_to_gga(msg: NMEAMessage, *, today_utc: date) -> GgaRecord:
 
     lat = _opt_float(msg.lat)
     lon = _opt_float(msg.lon)
-    alt = _opt_float(msg.alt)
+    # GGA поле 9 (msg.alt) — ОРТОМЕТРИЧЕСКАЯ высота (над геоидом).
+    # GGA поле 11 (msg.sep) — geoid separation N = h_эллипс − H_орто.
+    # Эллипсоидальная высота h = alt + sep. Без sep одна alt даёт
+    # систематический сдвиг на N (~16 м в МО) → ломает VRMS/3D.
+    orthometric_alt = _opt_float(msg.alt)
+    geoid_sep = _opt_float(msg.sep)
+    if orthometric_alt is not None and geoid_sep is not None:
+        ellipsoidal_alt: float | None = orthometric_alt + geoid_sep
+    else:
+        ellipsoidal_alt = None
+
     position: GeodeticPosition | None
-    if lat is not None and lon is not None and alt is not None:
+    if lat is not None and lon is not None and ellipsoidal_alt is not None:
         position = GeodeticPosition(
-            latitude_deg=lat, longitude_deg=lon, ellipsoidal_height_m=alt
+            latitude_deg=lat,
+            longitude_deg=lon,
+            ellipsoidal_height_m=ellipsoidal_alt,
         )
     elif solution_mode is SolutionMode.INVALID:
         position = None
     else:
         raise NmeaParseError(
-            f"GGA.quality={quality_raw} but position fields are empty"
+            f"GGA.quality={quality_raw} but position/geoid-sep fields are empty"
         )
 
     num_sv_raw = msg.numSV

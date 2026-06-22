@@ -1,4 +1,8 @@
 """Тесты NMEA-парсера на реальных байтах NMEA-0183.
+
+Высота: GGA поле 9 (alt) — ортометрическая (над геоидом); эллипсоидальная
+высота позиции = alt + поле 11 (sep, geoid separation). Покрытие сложения
+и отказа при отсутствии sep — в секции GGA ниже.
 """
 
 from datetime import UTC, date, datetime
@@ -55,7 +59,8 @@ def test_gga_rtk_fixed_full_fields() -> None:
     assert rec.position.latitude_deg == pytest.approx(55.7905967, abs=1e-6)
     # 037°39.69640'E = 37 + 39.69640/60 = 37.66160666..°
     assert rec.position.longitude_deg == pytest.approx(37.6616067, abs=1e-6)
-    assert rec.position.ellipsoidal_height_m == pytest.approx(180.5)
+    # alt 180.5 (орто, над геоидом) + sep 14.5 (geoid separation) = 195.0 эллипс
+    assert rec.position.ellipsoidal_height_m == pytest.approx(195.0)
 
 
 def test_gga_dgps_quality_2() -> None:
@@ -93,6 +98,50 @@ def test_gga_with_gp_talker() -> None:
     rec = parse_line(raw, today_utc=TODAY)
     assert isinstance(rec, GgaRecord)
     assert rec.solution_mode is SolutionMode.SPP
+
+
+def test_gga_height_adds_geoid_separation() -> None:
+    """Эллипсоидальная высота = поле 9 (орто) + поле 11 (geoid separation).
+
+    На реальном датуме пункта: 220,76 (над геоидом) + 15,94 (ζ) = 236,70.
+    Без сложения одна alt дала бы систематический вертикальный сдвиг на ζ.
+    """
+    raw = _frame(
+        "GNGGA,141637.00,5559.0583,N,03712.8201,E,4,12,0.8,220.76,M,15.94,M,2.0,0000"
+    )
+    rec = parse_line(raw, today_utc=TODAY)
+    assert isinstance(rec, GgaRecord)
+    assert rec.position is not None
+    assert rec.position.ellipsoidal_height_m == pytest.approx(236.70, abs=1e-2)
+
+
+def test_gga_height_with_negative_geoid_separation() -> None:
+    """Знак geoid separation учитывается: alt 120.0 + sep (-30.5) = 89.5."""
+    raw = _frame(
+        "GNGGA,141637.00,5559.0583,N,03712.8201,E,4,12,0.8,120.0,M,-30.5,M,2.0,0000"
+    )
+    rec = parse_line(raw, today_utc=TODAY)
+    assert isinstance(rec, GgaRecord)
+    assert rec.position is not None
+    assert rec.position.ellipsoidal_height_m == pytest.approx(89.5)
+
+
+def test_gga_fixed_without_geoid_sep_raises() -> None:
+    """Поле 11 пустое при quality=4 → громкий отказ, не тихий орто-сдвиг."""
+    raw = _frame(
+        "GNGGA,141637.00,5559.0583,N,03712.8201,E,4,12,0.8,220.76,M,,M,2.0,0000"
+    )
+    with pytest.raises(NmeaParseError):
+        parse_line(raw, today_utc=TODAY)
+
+
+def test_gga_dgps_without_geoid_sep_raises() -> None:
+    """Требование sep распространяется на все не-INVALID режимы (здесь DGNSS)."""
+    raw = _frame(
+        "GNGGA,083102.00,5547.00000,N,03737.00000,E,2,09,1.1,150.0,M,,M,3.5,0001"
+    )
+    with pytest.raises(NmeaParseError):
+        parse_line(raw, today_utc=TODAY)
 
 
 # ---------- GST ----------
