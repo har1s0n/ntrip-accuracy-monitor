@@ -326,17 +326,26 @@ class NtripClient:
                 ntrip_version=self._ntrip_version,
                 user_agent=self._user_agent,
             )
+            preamble = request
+            if self._gga_provider is not None:
+                with contextlib.suppress(ConnectionError, OSError):
+                    gga = await self._gga_provider()
+                    if gga:
+                        preamble = request + gga
+                        self._gga_sent += 1
             self._logger.debug(
-                "ntrip request bytes (%d):\n%s",
-                len(request),
-                request.decode("ascii", errors="backslashreplace"),
+                "ntrip request bytes (%d, gga_inline=%s)",
+                len(preamble), preamble is not request,
             )
-            writer.write(request)
+            writer.write(preamble)
             try:
-                await asyncio.wait_for(writer.drain(), timeout=self._connect_timeout_s)
+                await asyncio.wait_for(
+                    writer.drain(), timeout=self._connect_timeout_s,
+                )
             except (TimeoutError, asyncio.TimeoutError):
                 self._logger.warning(
-                    "ntrip request send timeout after %.1fs", self._connect_timeout_s
+                    "ntrip request send timeout after %.1fs",
+                    self._connect_timeout_s,
                 )
                 return None
 

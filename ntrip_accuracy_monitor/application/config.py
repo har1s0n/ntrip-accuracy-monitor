@@ -281,7 +281,7 @@ class ReferenceAntennaConfig(BaseModel):
 class AppConfig(BaseModel):
     """Корневая модель конфигурации приложения."""
 
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "DEBUG"
     postgres: PostgresConfig
     local_caster: LocalCasterConfig
     upstream_ntrip: UpstreamNtripConfig = UpstreamNtripConfig()

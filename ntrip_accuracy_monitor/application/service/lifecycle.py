@@ -81,6 +81,7 @@ from ntrip_accuracy_monitor.persistence.metrics_repository import (
     MetricsRepository,
 )
 from ntrip_accuracy_monitor.protocols.ntrip.caster import NtripCasterServer
+from ntrip_accuracy_monitor.protocols.ntrip._gga import static_gga_provider
 
 logger: Final = logging.getLogger(__name__)
 
@@ -283,6 +284,20 @@ class SessionLifecycle:
         host, port, use_https = _parse_ntrip_url(cfg.url)
 
         password = cfg.password.get_secret_value() if cfg.password else None
+        ref = self._config.reference_antenna
+        _static_gga = static_gga_provider(
+            lat_deg=ref.latitude_deg,
+            lon_deg=ref.longitude_deg,
+            alt_m=ref.ellipsoidal_height_m,
+        )
+
+        async def _upstream_gga() -> bytes | None:
+            if gga_provider is not None:
+                rover = await gga_provider.provide()
+                if rover:
+                    return rover
+            return await _static_gga()
+
         async with NtripClient(
             stream_id=cfg.mountpoint,
             caster_host=host,
@@ -296,9 +311,7 @@ class SessionLifecycle:
             stall_timeout_s=cfg.stall_timeout_s,
             reconnect_backoff=cfg.backoff.to_policy(),
             queue_max_size=cfg.queue_max_size,
-            gga_provider=(
-                gga_provider.provide if gga_provider is not None else None
-            ),
+            gga_provider=_upstream_gga,
             gga_interval_s=cfg.gga_interval_s,
             raw=True,  # ретранслируем весь поток, включая RTCM 2.x (type 41)
         ) as client:

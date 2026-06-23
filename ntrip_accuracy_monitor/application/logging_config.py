@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 
-def setup_logging(level: str = "INFO") -> None:
+def setup_logging(level: str = "DEBUG") -> None:
     """Настроить корневой логгер приложения.
 
     Args:

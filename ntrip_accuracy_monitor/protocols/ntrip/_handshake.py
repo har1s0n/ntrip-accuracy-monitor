@@ -26,6 +26,12 @@ _HEADER_KEY_ALLOWED: Final[frozenset[int]] = frozenset(
     b"abcdefghijklmnopqrstuvwxyz"
 )
 
+_MAX_HEADER_KEY_LEN: Final[int] = 64
+
+
+def _all_header_token(bs: bytes) -> bool:
+    return all(b in _HEADER_KEY_ALLOWED for b in bs)
+
 
 @dataclass(frozen=True, slots=True)
 class NtripResponse:
@@ -172,22 +178,29 @@ def _parse_icy_style(
     while True:
         eol = rest.find(b"\r\n", pos)
         if eol == -1:
-            # Possibly mid-header. Two cases:
-            #   (a) Last header is incomplete — wait for more data.
-            #   (b) Body has started and contains no \r\n yet.
-            # Disambiguate by looking at the first byte at `pos`.
-            if pos >= len(rest):
-                return None  # need more data
-            first = rest[pos]
-            if first in _HEADER_KEY_ALLOWED:
-                return None  # mid-header, keep buffering
-            # Body-byte detected (e.g. 0xD3). All bytes from `pos` are body.
+            # CRLF от pos ещё нет. Различаем незавершённый заголовок и
+            # тело без CRLF (RTCM 2.x печатный 0x40–0x7F; RTCM 3.x 0xD3…).
+            # Дискриминатор — форма заголовка `token+:`.
+            tail = rest[pos:]
+            if not tail:
+                return None  # ждём данных
+            colon = tail.find(b":")
+            if colon != -1 and _all_header_token(tail[:colon]):
+                return None  # ключ заголовка есть, ждём значение + CRLF
+            if (
+                colon == -1
+                and len(tail) <= _MAX_HEADER_KEY_LEN
+                and _all_header_token(tail)
+            ):
+                return None  # короткий token-прогон — возможно, недописанный ключ
+            # Непечатный/непунктуационный байт до ':' (RTCM 2.x '@','[' или
+            # RTCM 3.x 0xD3), либо прогон длиннее ключа → здесь начинается тело.
             return NtripResponse(
                 protocol=protocol,
                 status_code=code,
                 status_reason=reason,
                 headers=headers,
-                leftover=rest[pos:],
+                leftover=tail,
             )
 
         line = rest[pos:eol]

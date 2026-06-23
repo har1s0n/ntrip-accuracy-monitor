@@ -133,3 +133,35 @@ def test_build_request_v2() -> None:
     assert text.startswith("GET /ISRN00ITA0 HTTP/1.1\r\n")
     assert "Ntrip-Version: Ntrip/2.0\r\n" in text
     assert "Authorization" not in text  # no creds passed
+
+
+def test_icy_body_rtcm2_printable_is_not_header() -> None:
+    # Ответ RS3 в RTD: ICY + заголовки + RTCM 2.x (печатный, без CRLF, без ':').
+    buf = (
+        b"ICY 200 OK\r\n"
+        b"Ntrip-Version: Ntrip/1.0\r\n"
+        b"Server: NTRIP Caster 1.0\r\n"
+        b"Date: Tue, 23 Jun 2026 12:09:14 UTC\r\n"
+        b"fACxNxy@YpwCz[guB}LvQ"  # RTCM 2.x: 0x40-0x7F, есть '@','[','}'
+        b"\xd3\x00\x15>\xe0\x07\x03\x86"  # RTCM 3.x кадр
+    )
+    resp = parse_response(buf)
+    assert resp is not None
+    assert resp.protocol == "ICY"
+    assert resp.status_code == 200
+    assert resp.headers["ntrip-version"] == "Ntrip/1.0"
+    assert resp.headers["server"] == "NTRIP Caster 1.0"
+    assert resp.leftover.startswith(b"fACxNxy@")  # тело с первого байта RTCM 2.x
+
+
+def test_icy_body_rtcm3_binary_still_parses() -> None:
+    # Регрессия: тело RTCM 3.x (0xD3, непечатный) — путь, что работал в RTK.
+    buf = b"ICY 200 OK\r\nServer: NTRIP Caster 1.0\r\n\xd3\x00\x13>\xe0\x07"
+    resp = parse_response(buf)
+    assert resp is not None and resp.leftover.startswith(b"\xd3")
+
+
+def test_icy_incomplete_header_waits() -> None:
+    # Недописанный заголовок не должен опознаваться как тело.
+    assert parse_response(b"ICY 200 OK\r\nNtrip-Versio") is None
+    assert parse_response(b"ICY 200 OK\r\nNtrip-Version: Ntri") is None
